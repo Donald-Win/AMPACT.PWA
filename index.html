@@ -113,6 +113,7 @@
         let allColumnOptions = [];
         let allRowOptions = [];
         let deferredPrompt; // Variable to store the beforeinstallprompt event
+        let isIOS = false; // Global flag to store the platform check result
 
         // Define all possible background classes as a constant for easier management
         const ALL_BACKGROUND_CLASSES = [
@@ -486,22 +487,22 @@
         document.getElementById('column-search').addEventListener('input', updateDropdowns);
         document.getElementById('row-search').addEventListener('input', updateDropdowns);
         
+        // --- START PWA INSTALL LOGIC ---
         // PWA Installation Logic
-        let isIOS = false; // Flag to check for iOS platform
-
-        // --- NEW/FIXED LOGIC ---
+        
         /**
          * Checks the user's platform and displays the correct install UI element.
          * This function should be the single source of truth for showing/hiding
          * the PWA install elements.
          */
-        function updatePWAInstallUI() {
+        function handlePWAInstallUI() {
             const installButton = document.getElementById('install-button');
             const iosInstructions = document.getElementById('ios-install-instructions');
-            const userAgent = navigator.userAgent;
-
+            
             // Check if it's an iOS device. This check should be reliable.
-            isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+            isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            console.log(`User Agent: ${navigator.userAgent}`);
+            console.log(`Is this an iOS device? ${isIOS}`);
 
             if (isIOS) {
                 // If on iOS, hide the Android-specific button and show iOS instructions.
@@ -514,6 +515,7 @@
                 iosInstructions.style.display = 'none';
                 // The install button will be handled by the 'beforeinstallprompt' listener
                 // if it fires. We don't want to show it preemptively.
+                // We'll keep the button hidden until the event fires.
                 installButton.style.display = 'none';
                 console.log('Platform detected: Not iOS/iPadOS. Hiding iOS install instructions.');
             }
@@ -527,6 +529,7 @@
             deferredPrompt = event;
             
             // Only show the install button if it's a non-iOS device AND the deferredPrompt exists.
+            // The isIOS flag is set by the `handlePWAInstallUI` function.
             if (!isIOS) {
                 document.getElementById('install-button').style.display = 'block';
                 console.log('beforeinstallprompt fired. Install button shown (non-iOS).');
@@ -561,12 +564,14 @@
             document.getElementById('ios-install-instructions').style.display = 'none'; // Hide iOS instructions too
             console.log('PWA was successfully installed!');
         });
+        // --- END PWA INSTALL LOGIC ---
         
-        // Initialize data loading and PWA install UI check when the window is fully loaded
-        window.onload = function() {
-            loadData(); // This now internally calls checkClientKillSwitch()
-            updatePWAInstallUI(); // Call the single function to handle install UI
-        };
+        // Initialize data loading and PWA install UI check when the DOM is ready.
+        // This is more reliable than window.onload for these kinds of UI elements.
+        document.addEventListener('DOMContentLoaded', () => {
+            handlePWAInstallUI();
+            loadData();
+        });
     </script>
 </body>
 </html>
