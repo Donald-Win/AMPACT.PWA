@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ducky's AMPACT Selector</title>
+    <!-- Link to the web app manifest file -->
+    <link rel="manifest" href="manifest.json">
+    <!-- Tailwind CSS for modern, responsive styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom styles for the reset button position */
+        .input-container {
+            position: relative;
+        }
+        /* Style for disabled elements */
+        .disabled-overlay {
+            pointer-events: none;
+            opacity: 0.6;
+        }
+        /* Style for the install button, initially hidden */
+        #install-button {
+            display: none; /* Hidden by default */
+            /* Add some margin to separate it from other elements */
+            margin-top: 1.5rem; 
+        }
+    </style>
+</head>
+<body class="bg-gray-200 min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- Main container for the application -->
+    <div id="main-app-container" class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-4xl border-2 border-gray-800">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-2">Ducky's AMPACT Selector</h1>
+        <p class="text-center text-gray-600 mb-8">Choose your conductors below to find your AMPACT.</p>
+
+        <!-- Container for the controls (dropdowns and button) -->
+        <div class="flex flex-col sm:flex-row gap-4 mb-8 justify-center items-center">
+            
+            <!-- Column selection input and dropdown -->
+            <div class="flex-1 w-full sm:w-auto">
+                <div class="input-container relative">
+                    <input type="text" id="column-search" class="w-full p-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-colors mb-2 pr-8" placeholder="Filter Conductor 1..." />
+                    <button id="column-reset-btn" class="absolute right-2 top-1/2 -translate-y-1/2 text-xl font-bold text-gray-400 hover:text-gray-600 transition-colors hidden" onclick="resetFilter('column-search')">X</button>
+                </div>
+                
+                <select id="column-select" class="w-full p-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-colors">
+                    <!-- Options will be populated by JavaScript -->
+                </select>
+            </div>
+
+            <!-- Row selection input and dropdown -->
+            <div class="flex-1 w-full sm:w-auto">
+                <div class="input-container relative">
+                    <input type="text" id="row-search" class="w-full p-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-colors mb-2 pr-8" placeholder="Filter Conductor 2..." />
+                    <button id="row-reset-btn" class="absolute right-2 top-1/2 -translate-y-1/2 text-xl font-bold text-gray-400 hover:text-gray-600 transition-colors hidden" onclick="resetFilter('row-search')">X</button>
+                </div>
+                
+                <select id="row-select" class="w-full p-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-colors">
+                    <!-- Options will be populated by JavaScript -->
+                </select>
+            </div>
+
+            <!-- Get Value button -->
+            <button id="get-ampact-button" onclick="getCellValue()" class="w-full sm:w-auto mt-6 sm:mt-5 bg-gray-800 text-white font-semibold py-3 px-6 rounded-xl hover:bg-gray-700 transition-colors shadow-lg transform active:scale-95">
+                Get Ampact
+            </button>
+        </div>
+
+        <!-- Output display area -->
+        <div id="output-container" class="mt-8 text-center bg-gray-200 p-4 rounded-xl border-2 border-gray-800 min-h-[5rem] flex items-center justify-center">
+            <p id="output" class="text-xl text-gray-700 font-medium">Select conductors to find AMPACT</p>
+        </div>
+
+        <!-- Install App Button (initially hidden) -->
+        <button id="install-button" class="w-full sm:w-auto bg-green-600 text-white font-semibold py-3 px-6 rounded-xl hover:bg-green-700 transition-colors shadow-lg transform active:scale-95">
+            Install App
+        </button>
+
+    </div>
+
+    <!-- Version number -->
+    <p class="text-gray-500 text-sm mt-8">Version 0.0.2b</p>
+
+    <script>
+        // Global variables to store spreadsheet data and dropdown options
+        let spreadsheetData = [];
+        let allColumnOptions = [];
+        let allRowOptions = [];
+        let deferredPrompt; // Variable to store the beforeinstallprompt event
+
+        // Define all possible background classes as a constant for easier management
+        const ALL_BACKGROUND_CLASSES = [
+            'bg-red-200', 'bg-green-200', 'bg-yellow-400', 'bg-white', 
+            'bg-blue-400', 'bg-gray-200', 'bg-amber-700'
+        ];
+
+        /**
+         * Asynchronously loads data from 'data.json' and initializes the app.
+         * Handles potential errors during data fetching and parsing.
+         */
+        async function loadData() {
+            const outputElement = document.getElementById('output');
+            outputElement.textContent = 'Data is loading...'; // Initial loading message
+
+            try {
+                const response = await fetch('data.json');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status} - ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                spreadsheetData = data;
+                
+                if (spreadsheetData.length === 0) {
+                    displayMessage('Data loaded, but the JSON file is empty or malformed. Please ensure it has valid data.', 'text-gray-700');
+                    clearDropdowns();
+                    return;
+                } 
+                
+                const headers = Object.keys(spreadsheetData[0]);
+                if (headers.length === 0) {
+                    displayMessage('JSON data appears to be missing keys (headers). Please ensure your JSON objects have properties.', 'text-gray-700');
+                    clearDropdowns();
+                    return;
+                }
+
+                // Populate column options (excluding 'id' if present)
+                allColumnOptions = headers.filter(header => header !== 'id').map(header => ({value: header, text: header}));
+
+                if (allColumnOptions.length === 0) {
+                    displayMessage('No valid columns found in your JSON data to populate the first dropdown. Ensure your JSON objects have at least one property besides "id".', 'text-gray-700');
+                    clearDropdowns();
+                    return;
+                } else if (allColumnOptions.length === 1) { 
+                    // Inform user if only one column is found for the first dropdown
+                    displayMessage(`Only one column ("${allColumnOptions[0].text}") found for Conductor 1. Ensure your JSON has multiple columns if you expect more options.`, 'text-gray-700');
+                }
+
+                // Populate row options using the first data column's values
+                const firstDataColumnName = headers[0];
+                allRowOptions = spreadsheetData.map((row, index) => ({
+                    value: index, 
+                    text: row[firstDataColumnName] || `Row ${index + 1}` // Fallback label
+                }));
+                
+                if (allRowOptions.length === 0) {
+                    displayMessage('No valid rows found in your JSON data to populate the second dropdown. Ensure your JSON array contains objects.', 'text-gray-700');
+                    clearDropdowns();
+                    return;
+                }
+
+                // Log data for debugging purposes
+                console.log('Spreadsheet Data:', spreadsheetData);
+                console.log('All Column Options:', allColumnOptions);
+                console.log('All Row Options:', allRowOptions);
+
+                updateDropdowns(); // Populate dropdowns with loaded data
+                setResultColors('', 'text-gray-700'); // Reset colors to default
+                displayMessage('Select conductors to find AMPACT', 'text-gray-700'); // Initial prompt
+            } catch (error) {
+                console.error('Failed to load data:', error);
+                displayMessage(`Error loading data: ${error.message}. Please make sure 'data.json' is in the same folder and has valid JSON data.`, 'text-gray-700');
+                clearDropdowns();
+            }
+        }
+
+        /**
+         * Clears the content of both dropdowns.
+         */
+        function clearDropdowns() {
+            document.getElementById('column-select').innerHTML = '';
+            document.getElementById('row-select').innerHTML = '';
+        }
+
+        /**
+         * Displays a message in the output element with a specified text color.
+         * @param {string} message The text message to display.
+         * @param {string} textColorClass Tailwind CSS class for text color (e.g., 'text-gray-700').
+         */
+        function displayMessage(message, textColorClass) {
+            const outputElement = document.getElementById('output');
+            outputElement.textContent = message;
+            outputElement.classList.remove('text-white', 'text-black', 'text-gray-700', 'text-gray-800'); // Remove all potential text colors
+            outputElement.classList.add(textColorClass); // Apply specified text color
+        }
+        
+        /**
+         * Updates and repopulates both dropdowns based on current filter input values.
+         * Preserves existing selections if they are still valid options.
+         */
+        function updateDropdowns() {
+            const columnFilter = document.getElementById('column-search').value;
+            const rowFilter = document.getElementById('row-search').value;
+            
+            const columnSelect = document.getElementById('column-select');
+            const rowSelect = document.getElementById('row-select');
+            const columnResetBtn = document.getElementById('column-reset-btn');
+            const rowResetBtn = document.getElementById('row-reset-btn');
+
+            // Store current selections before updating to preserve them
+            const selectedColumnValue = columnSelect.value;
+            const selectedRowValue = rowSelect.value;
+
+            // Toggle visibility of the reset buttons based on filter input
+            columnResetBtn.style.display = columnFilter ? 'block' : 'none';
+            rowResetBtn.style.display = rowFilter ? 'block' : 'none';
+
+            // --- Populate Column Dropdown ---
+            columnSelect.innerHTML = ''; // Clear existing options
+            addPlaceholderOption(columnSelect, "Select a Conductor", columnFilter === '');
+
+            allColumnOptions.filter(option => 
+                option.text.toLowerCase().includes(columnFilter.toLowerCase())
+            ).forEach(option => {
+                const newOption = document.createElement('option');
+                newOption.value = option.value;
+                newOption.textContent = option.text;
+                columnSelect.appendChild(newOption);
+            });
+            // Attempt to re-select the previously chosen value if it's still in the options
+            if (selectedColumnValue && Array.from(columnSelect.options).some(option => option.value === selectedColumnValue)) {
+                columnSelect.value = selectedColumnValue;
+            }
+
+
+            // --- Populate Row Dropdown ---
+            rowSelect.innerHTML = ''; // Clear existing options
+            addPlaceholderOption(rowSelect, "Select a Conductor", rowFilter === '');
+
+            allRowOptions.filter(option => 
+                option.text.toLowerCase().includes(rowFilter.toLowerCase())
+            ).forEach(option => {
+                const newOption = document.createElement('option');
+                newOption.value = option.value;
+                newOption.textContent = option.text;
+                rowSelect.appendChild(newOption);
+            });
+            // Attempt to re-select the previously chosen value if it's still in the options
+            if (selectedRowValue && Array.from(rowSelect.options).some(option => option.value === selectedRowValue)) {
+                rowSelect.value = selectedRowValue;
+            }
+        }
+
+        /**
+         * Adds a placeholder option to a select element.
+         * @param {HTMLSelectElement} selectElement The select element to add the option to.
+         * @param {string} text The text content of the placeholder option.
+         * @param {boolean} isSelected Whether the placeholder should be selected by default.
+         */
+        function addPlaceholderOption(selectElement, text, isSelected) {
+            const option = document.createElement('option');
+            option.value = "";
+            option.textContent = text;
+            option.disabled = true;
+            option.selected = isSelected;
+            selectElement.appendChild(option);
+        }
+        
+        /**
+         * Resets the filter input field and updates the dropdowns.
+         * @param {string} inputId The ID of the input field to reset.
+         */
+        function resetFilter(inputId) {
+            document.getElementById(inputId).value = '';
+            updateDropdowns(); // Re-populate dropdowns after reset
+        }
+
+        /**
+         * Sets the background color of the output container and the body,
+         * and the text color of the output element based on the result value.
+         * @param {string} value The result value to check for color keywords.
+         * @param {string} defaultTextColorClass The default Tailwind CSS class for text color.
+         */
+        function setResultColors(value, defaultTextColorClass = 'text-black') {
+            const outputContainer = document.getElementById('output-container');
+            const bodyElement = document.body; 
+            const outputElement = document.getElementById('output'); 
+
+            // Reset both to default gray and set text color
+            outputContainer.classList.remove(...ALL_BACKGROUND_CLASSES);
+            outputContainer.classList.add('bg-gray-200'); // Default gray background
+            bodyElement.classList.remove(...ALL_BACKGROUND_CLASSES);
+            bodyElement.classList.add('bg-gray-200'); // Default gray background
+            outputElement.classList.remove('text-white', 'text-black', 'text-gray-700', 'text-gray-800'); 
+            outputElement.classList.add(defaultTextColorClass); 
+
+            if (typeof value === 'string' && value !== '') { 
+                const lowerCaseValue = value.toLowerCase();
+                let newBgClass = 'bg-gray-200'; // Default if no specific rule applies
+                let newTextColorClass = 'text-black'; // Default text color for light backgrounds
+
+                // Rule: If value contains "copper", set to copper color
+                if (lowerCaseValue.includes('copper')) {
+                    newBgClass = 'bg-amber-700'; // Copper color
+                    newTextColorClass = 'text-white'; // White text for dark copper background
+                } 
+                // Rule: If value contains "blue", set to blue color
+                else if (lowerCaseValue.includes('blue')) {
+                    newBgClass = 'bg-blue-400'; 
+                    newTextColorClass = 'text-black'; 
+                } 
+                // Rule: If value contains "white", set to white color
+                else if (lowerCaseValue.includes('white')) {
+                    newBgClass = 'bg-white';
+                    newTextColorClass = 'text-gray-800'; // Darker gray for white background
+                }
+                // Rule: If value contains "yellow", set to yellow color
+                else if (lowerCaseValue.includes('yellow')) {
+                    newBgClass = 'bg-yellow-400'; 
+                    newTextColorClass = 'text-black'; 
+                }
+                // If none of the specific color keywords are found, it remains default gray/black
+
+                // Apply the determined background class to both elements
+                outputContainer.classList.remove(...ALL_BACKGROUND_CLASSES); // Remove all previous to apply new one
+                outputContainer.classList.add(newBgClass);
+                bodyElement.classList.remove(...ALL_BACKGROUND_CLASSES); // Remove all previous to apply new one
+                bodyElement.classList.add(newBgClass);
+                outputElement.classList.remove('text-black', 'text-white', 'text-gray-700', 'text-gray-800'); 
+                outputElement.classList.add(newTextColorClass); 
+            }
+        }
+
+        /**
+         * Retrieves the cell value based on selected conductors and displays it.
+         * Applies dynamic coloring and text formatting.
+         */
+        function getCellValue() {
+            const column = document.getElementById('column-select').value;
+            const rowIndex = parseInt(document.getElementById('row-select').value);
+            const outputElement = document.getElementById('output');
+
+            // Resetting output container and body to default state and text color for initial message/errors
+            setResultColors('', 'text-gray-700'); 
+
+            if (!column || isNaN(rowIndex)) {
+                 displayMessage('Please select both conductors.', 'text-gray-700');
+                 return;
+            }
+
+            const selectedRow = spreadsheetData[rowIndex];
+
+            if (selectedRow) {
+                const value = selectedRow[column];
+                console.log('Original Value Retrieved:', value); // Debugging log
+                if (value !== undefined) {
+                    let displayValue = String(value);
+                    let useInnerHTML = false; 
+
+                    // Apply background and text colors based on the original value
+                    setResultColors(value);
+
+                    // Modify displayValue based on keywords, and set useInnerHTML flag
+                    if (displayValue.toLowerCase().includes('copper')) {
+                        displayValue = displayValue.replace(/copper/i, '<br>Copper');
+                        useInnerHTML = true;
+                    }
+                    if (displayValue.toLowerCase().includes('blue')) {
+                        displayValue = displayValue.replace(/blue/i, '');
+                    }
+                    if (displayValue.toLowerCase().includes('white')) {
+                        displayValue = displayValue.replace(/white/i, '');
+                    }
+                    if (displayValue.toLowerCase().includes('yellow')) {
+                        displayValue = displayValue.replace(/yellow/i, '');
+                    }
+                    
+                    console.log('Modified Display Value:', displayValue); // Debugging log
+
+                    if (useInnerHTML) {
+                        outputElement.innerHTML = displayValue; 
+                    } else {
+                        outputElement.textContent = displayValue; 
+                    }
+                    
+                } else {
+                    displayMessage('Error: Column not found for selected row.', 'text-gray-700');
+                }
+            } else {
+                displayMessage('Error: Row not found.', 'text-gray-700');
+            }
+        }
+        
+        // Event listeners for filter inputs to update dropdowns dynamically
+        document.getElementById('column-search').addEventListener('input', updateDropdowns);
+        document.getElementById('row-search').addEventListener('input', updateDropdowns);
+        
+        // PWA Installation Logic
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./service-worker.js') // Corrected path
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    }, err => {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+            });
+
+            // Listen for the beforeinstallprompt event
+            window.addEventListener('beforeinstallprompt', (event) => {
+                // Prevent the mini-infobar from appearing on mobile
+                event.preventDefault();
+                // Stash the event so it can be triggered later.
+                deferredPrompt = event;
+                // Update UI to notify the user they can add to home screen
+                document.getElementById('install-button').style.display = 'block';
+                console.log('beforeinstallprompt fired. Install button shown.');
+            });
+
+            // Handle the click on the custom install button
+            document.getElementById('install-button').addEventListener('click', () => {
+                if (deferredPrompt) {
+                    // Show the install prompt
+                    deferredPrompt.prompt();
+                    // Wait for the user to respond to the prompt
+                    deferredPrompt.userChoice.then((choiceResult) => {
+                        if (choiceResult.outcome === 'accepted') {
+                            console.log('User accepted the A2HS prompt');
+                        } else {
+                            console.log('User dismissed the A2HS prompt');
+                        }
+                        // We've used the prompt, and it can't be used again. Hide the button.
+                        deferredPrompt = null;
+                        document.getElementById('install-button').style.display = 'none';
+                    });
+                }
+            });
+
+            // Listen for the appinstalled event
+            window.addEventListener('appinstalled', () => {
+                // Hide the install button once the app is installed
+                document.getElementById('install-button').style.display = 'none';
+                console.log('PWA was successfully installed!');
+            });
+
+            // Listen for messages from the service worker (e.g., kill switch activation)
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'PWA_DISABLED') {
+                    console.log('Received PWA_DISABLED message from service worker.');
+                    displayMessage(event.data.message, 'text-red-700'); // Display the admin message in red
+                    
+                    // Disable all interactive elements
+                    document.getElementById('column-search').disabled = true;
+                    document.getElementById('column-select').disabled = true;
+                    document.getElementById('row-search').disabled = true;
+                    document.getElementById('row-select').disabled = true;
+                    document.getElementById('get-ampact-button').disabled = true;
+
+                    // Add a visual disabled state to the main container
+                    document.getElementById('main-app-container').classList.add('disabled-overlay');
+
+                    // Hide reset buttons
+                    document.getElementById('column-reset-btn').style.display = 'none';
+                    document.getElementById('row-reset-btn').style.display = 'none';
+                    // Also hide the install button if the app is disabled
+                    document.getElementById('install-button').style.display = 'none';
+                }
+            });
+        }
+
+        // Initialize data loading when the window is fully loaded
+        window.onload = function() {
+            loadData();
+        };
+    </script>
+</body>
+</html>
+
+
