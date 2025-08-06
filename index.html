@@ -174,12 +174,14 @@
             }
 
             try {
+                console.log('Client: Attempting to fetch data.json...');
                 const response = await fetch('data.json');
                 
                 if (!response.ok) {
                     throw new Error(`HTTP error! Status: ${response.status} - ${response.statusText}`);
                 }
                 
+                console.log('Client: data.json fetched successfully. Parsing JSON...');
                 const data = await response.json();
                 spreadsheetData = data;
                 
@@ -189,6 +191,7 @@
                     return;
                 } 
                 
+                console.log('Client: JSON parsed. Extracting headers...');
                 const headers = Object.keys(spreadsheetData[0]);
                 if (headers.length === 0) {
                     displayMessage('JSON data appears to be missing keys (headers). Please ensure your JSON objects have properties.', 'text-gray-700');
@@ -372,7 +375,7 @@
                     newBgClass = 'bg-blue-400'; 
                     newTextColorClass = 'text-black'; 
                 } 
-                // Rule: If value contains "white')) {
+                // Rule: If value contains "white")) {
                     newBgClass = 'bg-white';
                     newTextColorClass = 'text-gray-800'; // Darker gray for white background
                 }
