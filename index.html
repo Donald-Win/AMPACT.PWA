@@ -486,92 +486,86 @@
         document.getElementById('column-search').addEventListener('input', updateDropdowns);
         document.getElementById('row-search').addEventListener('input', updateDropdowns);
         
+        // PWA Installation Logic
+        let isIOS = false; // Flag to check for iOS platform
+
+        // --- NEW/FIXED LOGIC ---
         /**
-         * Checks the user's platform and displays appropriate install instructions.
+         * Checks the user's platform and displays the correct install UI element.
+         * This function should be the single source of truth for showing/hiding
+         * the PWA install elements.
          */
-        function checkPlatformAndDisplayInstructions() {
+        function updatePWAInstallUI() {
             const installButton = document.getElementById('install-button');
             const iosInstructions = document.getElementById('ios-install-instructions');
             const userAgent = navigator.userAgent;
 
-            const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+            // Check if it's an iOS device. This check should be reliable.
+            isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
 
             if (isIOS) {
-                // If on iOS, hide the Android-specific button and show iOS instructions
+                // If on iOS, hide the Android-specific button and show iOS instructions.
                 installButton.style.display = 'none';
                 iosInstructions.style.display = 'block';
                 console.log('Platform detected: iOS/iPadOS. Showing iOS install instructions.');
             } else {
-                // For non-iOS platforms, hide iOS instructions.
-                // The 'beforeinstallprompt' listener will handle showing the installButton.
+                // On non-iOS, hide the instructions. The `beforeinstallprompt` event
+                // will handle showing the `install-button` later if applicable.
                 iosInstructions.style.display = 'none';
+                // The install button will be handled by the 'beforeinstallprompt' listener
+                // if it fires. We don't want to show it preemptively.
+                installButton.style.display = 'none';
                 console.log('Platform detected: Not iOS/iPadOS. Hiding iOS install instructions.');
             }
         }
+        
+        // Event listener to capture the deferred prompt
+        window.addEventListener('beforeinstallprompt', (event) => {
+            // Prevent the mini-infobar from appearing on mobile
+            event.preventDefault();
+            // Stash the event so it can be triggered later.
+            deferredPrompt = event;
+            
+            // Only show the install button if it's a non-iOS device AND the deferredPrompt exists.
+            if (!isIOS) {
+                document.getElementById('install-button').style.display = 'block';
+                console.log('beforeinstallprompt fired. Install button shown (non-iOS).');
+            } else {
+                console.log('beforeinstallprompt fired, but on iOS. Not showing install button.');
+            }
+        });
 
-        // PWA Installation Logic
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                // Register the service worker
-                navigator.serviceWorker.register('./service-worker.js') 
-                    .then(registration => {
-                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                    }, err => {
-                        console.log('ServiceWorker registration failed: ', err);
-                    });
-            });
+        // Handle the click on the custom install button
+        document.getElementById('install-button').addEventListener('click', () => {
+            if (deferredPrompt) {
+                // Show the install prompt
+                deferredPrompt.prompt();
+                // Wait for the user to respond to the prompt
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('User accepted the A2HS prompt');
+                    } else {
+                        console.log('User dismissed the A2HS prompt');
+                    }
+                    // We've used the prompt, and it can't be used again. Hide the button.
+                    deferredPrompt = null;
+                    document.getElementById('install-button').style.display = 'none';
+                });
+            }
+        });
 
-            // Listen for the beforeinstallprompt event for A2HS prompt
-            window.addEventListener('beforeinstallprompt', (event) => {
-                // Prevent the mini-infobar from appearing on mobile
-                event.preventDefault();
-                // Stash the event so it can be triggered later.
-                deferredPrompt = event;
-                
-                // Only show the install button if it's not iOS
-                const userAgent = navigator.userAgent;
-                const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
-                if (!isIOS) {
-                    document.getElementById('install-button').style.display = 'block';
-                    document.getElementById('ios-install-instructions').style.display = 'none'; // Ensure iOS instructions are hidden
-                    console.log('beforeinstallprompt fired. Install button shown (non-iOS).');
-                } else {
-                    console.log('beforeinstallprompt fired, but on iOS. Not showing install button.');
-                }
-            });
-
-            // Handle the click on the custom install button
-            document.getElementById('install-button').addEventListener('click', () => {
-                if (deferredPrompt) {
-                    // Show the install prompt
-                    deferredPrompt.prompt();
-                    // Wait for the user to respond to the prompt
-                    deferredPrompt.userChoice.then((choiceResult) => {
-                        if (choiceResult.outcome === 'accepted') {
-                            console.log('User accepted the A2HS prompt');
-                        } else {
-                            console.log('User dismissed the A2HS prompt');
-                        }
-                        // We've used the prompt, and it can't be used again. Hide the button.
-                        deferredPrompt = null;
-                        document.getElementById('install-button').style.display = 'none';
-                    });
-                }
-            });
-
-            // Listen for the appinstalled event
-            window.addEventListener('appinstalled', () => {
-                // Hide the install button once the app is installed
-                document.getElementById('install-button').style.display = 'none';
-                document.getElementById('ios-install-instructions').style.display = 'none'; // Hide iOS instructions too
-                console.log('PWA was successfully installed!');
-            });
-        }
-
-        // Initialize data loading and client-side kill switch check when the window is fully loaded
+        // Listen for the appinstalled event
+        window.addEventListener('appinstalled', () => {
+            // Hide the install button once the app is installed
+            document.getElementById('install-button').style.display = 'none';
+            document.getElementById('ios-install-instructions').style.display = 'none'; // Hide iOS instructions too
+            console.log('PWA was successfully installed!');
+        });
+        
+        // Initialize data loading and PWA install UI check when the window is fully loaded
         window.onload = function() {
             loadData(); // This now internally calls checkClientKillSwitch()
-            checkPlatformAndDisplayInstructions(); // Check platform for install instructions
+            updatePWAInstallUI(); // Call the single function to handle install UI
         };
     </script>
 </body>
