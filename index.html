@@ -449,7 +449,9 @@
                     displayMessage('Error: Column not found for selected row.', 'text-gray-700');
                 }
             } else {
-                displayMessage('Error: Row not found.', 'text-gray-700');
+                outputElement.textContent = 'Error: Row not found.';
+                outputElement.classList.remove('text-black');
+                outputElement.classList.add('text-gray-700');
             }
         }
         
@@ -515,5 +517,4 @@
     </script>
 </body>
 </html>
-
 
