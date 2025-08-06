@@ -375,7 +375,8 @@
                     newBgClass = 'bg-blue-400'; 
                     newTextColorClass = 'text-black'; 
                 } 
-                // Rule: If value contains "white")) {
+                // Corrected line:
+                else if (lowerCaseValue.includes('white')) {
                     newBgClass = 'bg-white';
                     newTextColorClass = 'text-gray-800'; // Darker gray for white background
                 }
