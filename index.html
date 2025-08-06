@@ -25,8 +25,23 @@
         /* Style for the install button, initially hidden */
         #install-button {
             display: none; /* Hidden by default */
-            /* Add some margin to separate it from other elements */
             margin-top: 1.5rem; 
+        }
+        /* Style for iOS instructions, initially hidden */
+        #ios-install-instructions {
+            display: none; /* Hidden by default */
+            margin-top: 1.5rem;
+            background-color: #e0f2fe; /* Light blue background */
+            padding: 1rem;
+            border-radius: 0.75rem; /* Rounded corners */
+            border: 1px solid #90cdf4; /* Blue border */
+            color: #2b6cb0; /* Darker blue text */
+            font-size: 0.9rem;
+            line-height: 1.4;
+            text-align: center;
+        }
+        #ios-install-instructions strong {
+            color: #1a4e8d; /* Even darker blue for emphasis */
         }
     </style>
 </head>
@@ -80,6 +95,13 @@
             Install App
         </button>
 
+        <!-- iOS Install Instructions (initially hidden) -->
+        <div id="ios-install-instructions">
+            <strong>To install this app on your iPad/iPhone:</strong><br>
+            1. Tap the <img src="https://placehold.co/20x20/000000/FFFFFF?text=%E2%86%91" alt="Share icon" style="display:inline-block; vertical-align:middle; margin: 0 4px; border-radius: 4px;"> <strong>Share icon</strong> in Safari's toolbar.<br>
+            2. Scroll down and select <strong>"Add to Home Screen"</strong>.
+        </div>
+
     </div>
 
     <!-- Version number -->
@@ -121,6 +143,7 @@
             document.getElementById('row-reset-btn').style.display = 'none';
             // Also hide the install button if the app is disabled
             document.getElementById('install-button').style.display = 'none';
+            document.getElementById('ios-install-instructions').style.display = 'none'; // Hide iOS instructions too
         }
 
         /**
@@ -463,6 +486,29 @@
         document.getElementById('column-search').addEventListener('input', updateDropdowns);
         document.getElementById('row-search').addEventListener('input', updateDropdowns);
         
+        /**
+         * Checks the user's platform and displays appropriate install instructions.
+         */
+        function checkPlatformAndDisplayInstructions() {
+            const installButton = document.getElementById('install-button');
+            const iosInstructions = document.getElementById('ios-install-instructions');
+            const userAgent = navigator.userAgent;
+
+            const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+
+            if (isIOS) {
+                // If on iOS, hide the Android-specific button and show iOS instructions
+                installButton.style.display = 'none';
+                iosInstructions.style.display = 'block';
+                console.log('Platform detected: iOS/iPadOS. Showing iOS install instructions.');
+            } else {
+                // For non-iOS platforms, hide iOS instructions.
+                // The 'beforeinstallprompt' listener will handle showing the installButton.
+                iosInstructions.style.display = 'none';
+                console.log('Platform detected: Not iOS/iPadOS. Hiding iOS install instructions.');
+            }
+        }
+
         // PWA Installation Logic
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
@@ -481,9 +527,17 @@
                 event.preventDefault();
                 // Stash the event so it can be triggered later.
                 deferredPrompt = event;
-                // Update UI to notify the user they can add to home screen
-                document.getElementById('install-button').style.display = 'block';
-                console.log('beforeinstallprompt fired. Install button shown.');
+                
+                // Only show the install button if it's not iOS
+                const userAgent = navigator.userAgent;
+                const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+                if (!isIOS) {
+                    document.getElementById('install-button').style.display = 'block';
+                    document.getElementById('ios-install-instructions').style.display = 'none'; // Ensure iOS instructions are hidden
+                    console.log('beforeinstallprompt fired. Install button shown (non-iOS).');
+                } else {
+                    console.log('beforeinstallprompt fired, but on iOS. Not showing install button.');
+                }
             });
 
             // Handle the click on the custom install button
@@ -509,14 +563,15 @@
             window.addEventListener('appinstalled', () => {
                 // Hide the install button once the app is installed
                 document.getElementById('install-button').style.display = 'none';
+                document.getElementById('ios-install-instructions').style.display = 'none'; // Hide iOS instructions too
                 console.log('PWA was successfully installed!');
             });
-            // No message listener for PWA_DISABLED here, as index.html handles it directly
         }
 
         // Initialize data loading and client-side kill switch check when the window is fully loaded
         window.onload = function() {
             loadData(); // This now internally calls checkClientKillSwitch()
+            checkPlatformAndDisplayInstructions(); // Check platform for install instructions
         };
     </script>
 </body>
