@@ -9,31 +9,83 @@
     <!-- Tailwind CSS for modern, responsive styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
         body {
             font-family: 'Inter', sans-serif;
         }
-        /* Custom styles for the reset button position */
         .input-container {
             position: relative;
         }
-        /* Style for disabled elements */
-        .disabled-overlay {
-            pointer-events: none;
-            opacity: 0.6;
-        }
-        /* Style for the install button, initially hidden */
         #install-button {
-            display: none; /* Hidden by default */
+            display: none; 
             margin-top: 1.5rem; 
         }
-        /* Style for iOS instructions, initially hidden */
         #ios-install-instructions {
-            display: none; /* Hidden by default */
+            display: none;
             margin-top: 1.5rem;
-            background-color: #e0f2fe; /* Light blue background */
+            background-color: #e0f2fe;
             padding: 1rem;
-            border-radius: 0.75rem; /* Rounded corners */
+            border-radius: 0.75rem;
+            border: 1px solid #bae6fd;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div id="main-content" class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
+        <h1 class="text-3xl font-bold mb-6 text-gray-800 text-center">AMPACT Selector</h1>
+        
+        <!-- Large Side (Tap) Selector -->
+        <div class="mb-6 input-container" id="tap-container">
+            <label for="tap-select" class="block text-sm font-medium text-gray-700 mb-2">Large Side (Tap)</label>
+            <select id="tap-select" class="block w-full p-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900 transition ease-in-out">
+                <option value="">Select Conductor...</option>
+            </select>
+        </div>
+
+        <!-- Small Side (Stirrup) Selector -->
+        <div class="mb-8 input-container" id="stirrup-container">
+            <label for="stirrup-select" class="block text-sm font-medium text-gray-700 mb-2">Small Side (Stirrup)</label>
+            <select id="stirrup-select" class="block w-full p-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900 transition ease-in-out">
+                <option value="">Select Conductor...</option>
+            </select>
+        </div>
+
+        <!-- Result Display Area -->
+        <div id="output-container" class="bg-gray-50 p-6 rounded-xl border border-gray-200 text-center min-h-[120px] flex flex-col items-center justify-center">
+            <p id="output" class="text-xl font-bold text-gray-700 leading-tight">Data is loading...</p>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex flex-col gap-3 mt-6">
+            <button id="reset-button" class="w-full bg-gray-800 hover:bg-black text-white font-bold py-3 px-4 rounded-lg transition duration-200">
+                Clear Selection
+            </button>
+            
+            <button id="install-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md">
+                Install App for Offline Use
+            </button>
+        </div>
+
+        <!-- iOS Specific Instructions -->
+        <div id="ios-install-instructions">
+            <p class="text-blue-800 text-sm font-medium">
+                To install on iOS: Tap the <span class="font-bold">Share</span> icon (square with arrow) and select <span class="font-bold">"Add to Home Screen"</span>.
+            </p>
+        </div>
+    </div>
+
+    <!-- Disabled Overlay (Kill Switch) -->
+    <div id="kill-switch-overlay" class="hidden fixed inset-0 bg-white/95 z-50 flex flex-col items-center justify-center text-center p-6">
+        <h2 class="text-2xl font-bold text-red-600 mb-4">Service Unavailable</h2>
+        <p class="text-gray-700 max-w-sm">This application has been temporarily disabled by the administrator. Please contact your Ducky for the latest version.</p>
+    </div>
+
+    <!-- Modular Script -->
+    <script src="app.js" defer></script>
+</body>
+</html>
+
             border: 1px solid #90cdf4; /* Blue border */
             color: #2b6cb0; /* Darker blue text */
             font-size: 0.9rem;
