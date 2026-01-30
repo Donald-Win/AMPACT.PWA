@@ -1,40 +1,65 @@
-const CACHE_NAME = 'ampact-selector-cache-v1'; // Original cache name for first iteration
+const CACHE_NAME = 'ampact-selector-cache-v2'; // Incremented version
 
 const urlsToCache = [
-  './', // Caches the root URL (index.html)
+  './',
   'index.html',
+  'app.js',
   'data.json',
-  'manifest.json', // Ensure manifest is also cached
+  'manifest.json',
   'icons/icon-192x192.png',
   'icons/icon-512x512.png',
-  // Note: kill-switch.json is NOT cached by the service worker,
-  // as index.html fetches it directly with cache-busting.
 ];
 
-// Install event: Cache essential assets and force immediate activation
+// Install: Cache essential assets
 self.addEventListener('install', (event) => {
-  console.log('SW: Install event fired. Caching and skipping waiting.');
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('SW: Opened cache. Caching URLs:', urlsToCache);
-        return cache.addAll(urlsToCache);
-      })
-      .then(() => {
-        // Force the waiting service worker to become the active service worker
-        console.log('SW: Calling self.skipWaiting()');
-        return self.skipWaiting(); 
-      })
-      .catch(err => {
-        console.error('SW: Failed to cache during install:', err);
-      })
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(urlsToCache);
+    }).then(() => self.skipWaiting())
   );
 });
 
-// Activate event: Clean up old caches and claim clients immediately
+// Activate: Clean up old caches
 self.addEventListener('activate', (event) => {
-  console.log('SW: Activate event fired. Cleaning old caches and claiming clients.');
   const cacheWhitelist = [CACHE_NAME];
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (!cacheWhitelist.includes(cacheName)) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
+});
+
+// Fetch: Stale-While-Revalidate strategy
+self.addEventListener('fetch', (event) => {
+  // We don't cache the kill-switch to ensure it stays "live"
+  if (event.request.url.includes('kill-switch.json')) {
+    return event.respondWith(fetch(event.request));
+  }
+
+  event.respondWith(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.match(event.request).then((cachedResponse) => {
+        const fetchPromise = fetch(event.request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        }).catch(() => {
+            // If network fails, the cachedResponse (if any) will still be returned
+        });
+
+        // Return cached version immediately, update cache in background
+        return cachedResponse || fetchPromise;
+      });
+    })
+  );
+});  const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
