@@ -1,25 +1,25 @@
 /**
- * AMPACT Service Worker - v6.3.7
- * Fix: Relative paths for better reliability on GitHub Pages
+ * AMPACT Service Worker - v6.3.8
+ * Matching GitHub folder structure exactly.
  */
 
-const CACHE_NAME = 'ampact-cache-v6.3.7';
+const CACHE_NAME = 'ampact-cache-v6.3.8';
 const ASSETS = [
   './',
   './index.html',
   './app.js',
   './manifest.json',
-  './data.xlsx'
+  './data.xlsx',
+  './icons/icon-192x192.png',
+  './icons/icon-512x512.png'
 ];
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // Use addAll but catch individual failures so the whole SW doesn't break
-      return Promise.allSettled(
-        ASSETS.map(url => cache.add(url))
-      );
+      // Use Settled to ensure one missing icon doesn't kill the whole app
+      return Promise.allSettled(ASSETS.map(url => cache.add(url)));
     })
   );
 });
