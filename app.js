@@ -1,5 +1,5 @@
 /**
- * Ducky's AMPACT Selector - Core Logic v2.0.3
+ * Ducky's AMPACT Selector - Core Logic v2.0.4
  */
 
 let spreadsheetData = [];
@@ -7,19 +7,17 @@ let tapSelection = '';
 let stirrupSelection = '';
 let deferredPrompt;
 
-// Color Mapping Configuration for Output Box
-const colorMap = {
-    'blue': { bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-700' },
-    'yellow': { bg: 'bg-yellow-400', text: 'text-gray-900', border: 'border-yellow-500' },
-    'white': { bg: 'bg-white', text: 'text-gray-900', border: 'border-gray-300' },
-    'red': { bg: 'bg-red-600', text: 'text-white', border: 'border-red-700' },
-    'copper': { bg: 'bg-[#b87333]', text: 'text-white', border: 'border-[#8b5a2b]' },
-    'default': { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' }
+// Professional Color Themes
+const colorThemes = {
+    'blue': { bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
+    'yellow': { bg: 'bg-yellow-400', text: 'text-gray-900', border: 'border-yellow-600' },
+    'white': { bg: 'bg-white', text: 'text-gray-900', border: 'border-gray-400' },
+    'red': { bg: 'bg-red-600', text: 'text-white', border: 'border-red-800' },
+    'copper': { bg: 'bg-[#b87333]', text: 'text-white', border: 'border-[#7d4e22]' },
+    'default': { bg: 'bg-gray-200', text: 'text-gray-500', border: 'border-gray-300' }
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-    initApp();
-});
+document.addEventListener('DOMContentLoaded', initApp);
 
 async function initApp() {
     registerServiceWorker();
@@ -30,41 +28,30 @@ async function initApp() {
 
 function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('service-worker.js')
-                .then(reg => console.log('SW: Registered'))
-                .catch(err => console.error('SW: Failed', err));
-        });
+        navigator.serviceWorker.register('service-worker.js').catch(console.error);
     }
 }
 
 async function loadData() {
-    if (await checkClientKillSwitch()) return;
-
+    if (await checkKillSwitch()) return;
     try {
         const response = await fetch(`data.json?t=${Date.now()}`);
-        if (!response.ok) throw new Error("Data unreachable");
-        
-        const data = await response.json();
-        spreadsheetData = data;
-        
-        populateDropdown('tap', '');
-        populateDropdown('stirrup', '');
-        displayMessage('Select conductors to find AMPACT', 'default');
-    } catch (error) {
-        displayMessage(`⚠️ ${error.message}`, 'default');
+        spreadsheetData = await response.json();
+        updateDropdown('tap', '');
+        updateDropdown('stirrup', '');
+        displayResult('Awaiting Selection', 'default');
+    } catch (e) {
+        displayResult('Data Error', 'default');
     }
 }
 
-async function checkClientKillSwitch() {
+async function checkKillSwitch() {
     try {
-        const response = await fetch(`kill-switch.json?t=${Date.now()}`, { cache: 'no-store' });
-        if (response.ok) {
-            const config = await response.json();
-            if (config.disablePWA) {
-                document.getElementById('kill-switch-overlay').classList.remove('hidden');
-                return true;
-            }
+        const res = await fetch(`kill-switch.json?t=${Date.now()}`, { cache: 'no-store' });
+        const cfg = await res.json();
+        if (cfg.disablePWA) {
+            document.getElementById('kill-switch-overlay').classList.remove('hidden');
+            return true;
         }
     } catch (e) {}
     return false;
@@ -76,28 +63,31 @@ function setupEventListeners() {
     const tapSelect = document.getElementById('tap-select');
     const stirrupSelect = document.getElementById('stirrup-select');
 
-    // Filtering logic
-    tapSearch.addEventListener('input', (e) => populateDropdown('tap', e.target.value));
-    stirrupSearch.addEventListener('input', (e) => populateDropdown('stirrup', e.target.value));
-
-    // Selection logic
-    tapSelect.addEventListener('change', (e) => {
-        tapSelection = e.target.value;
-        findResult();
-    });
-    stirrupSelect.addEventListener('change', (e) => {
-        stirrupSelection = e.target.value;
-        findResult();
+    // Live Filtering with Visual Feedback
+    tapSearch.addEventListener('input', (e) => {
+        handleSearchAnimation(tapSelect);
+        updateDropdown('tap', e.target.value);
     });
 
-    document.getElementById('reset-button').addEventListener('click', resetSelection);
+    stirrupSearch.addEventListener('input', (e) => {
+        handleSearchAnimation(stirrupSelect);
+        updateDropdown('stirrup', e.target.value);
+    });
+
+    tapSelect.addEventListener('change', (e) => { tapSelection = e.target.value; calculate(); });
+    stirrupSelect.addEventListener('change', (e) => { stirrupSelection = e.target.value; calculate(); });
+
+    document.getElementById('reset-button').addEventListener('click', resetAll);
 }
 
-function populateDropdown(type, query) {
+function handleSearchAnimation(element) {
+    element.classList.add('filtering');
+    setTimeout(() => element.classList.remove('filtering'), 500);
+}
+
+function updateDropdown(type, query) {
     const select = document.getElementById(`${type}-select`);
     const conductorKey = Object.keys(spreadsheetData[0])[0];
-    
-    // Remember current selection if it still exists in the filtered list
     const currentVal = select.value;
 
     select.innerHTML = '<option value="">Select Conductor...</option>';
@@ -107,70 +97,60 @@ function populateDropdown(type, query) {
     );
 
     filtered.forEach(row => {
-        const name = row[conductorKey];
         const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
+        opt.value = row[conductorKey];
+        opt.textContent = row[conductorKey];
         select.appendChild(opt);
     });
 
-    // Restore selection if applicable
+    // Keep selection if it's still in the filtered list
     if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
         select.value = currentVal;
     }
 }
 
-function findResult() {
+function calculate() {
     if (!tapSelection || !stirrupSelection) {
-        displayMessage('Select both sides to see result', 'default');
+        displayResult('Awaiting Selection', 'default');
         return;
     }
 
     const conductorKey = Object.keys(spreadsheetData[0])[0];
     const row = spreadsheetData.find(r => r[conductorKey] === tapSelection);
-    const result = row ? row[stirrupSelection] : null;
+    const val = row ? row[stirrupSelection] : null;
 
-    if (result && result.trim() !== "") {
-        const lowerResult = result.toLowerCase();
-        let colorKey = 'default';
-        
-        if (lowerResult.includes('blue')) colorKey = 'blue';
-        else if (lowerResult.includes('yellow')) colorKey = 'yellow';
-        else if (lowerResult.includes('white')) colorKey = 'white';
-        else if (lowerResult.includes('red')) colorKey = 'red';
-        else if (lowerResult.includes('copper')) colorKey = 'copper';
-
-        displayMessage(result, colorKey);
+    if (val && val.trim() !== "") {
+        const color = val.toLowerCase();
+        let key = 'default';
+        if (color.includes('blue')) key = 'blue';
+        else if (color.includes('yellow')) key = 'yellow';
+        else if (color.includes('white')) key = 'white';
+        else if (color.includes('red')) key = 'red';
+        else if (color.includes('copper')) key = 'copper';
+        displayResult(val, key);
     } else {
-        displayMessage('❌ No AMPACT match found', 'default');
+        displayResult('No Match', 'default');
     }
 }
 
-function displayMessage(text, colorKey) {
+function displayResult(text, key) {
     const output = document.getElementById('output');
     const box = document.getElementById('output-box');
-    const styles = colorMap[colorKey] || colorMap.default;
+    const theme = colorThemes[key];
 
-    // Reset styles
-    Object.values(colorMap).forEach(s => {
-        box.classList.remove(s.bg, s.border, 'text-white', 'text-gray-900', 'text-gray-700');
-        output.classList.remove(s.text);
-    });
-
-    // Apply new styles
-    box.classList.add(styles.bg, styles.border);
-    output.classList.add(styles.text);
+    // Reset Box Classes (Clean Tailwind reset)
+    box.className = `p-8 rounded-2xl border-4 text-center min-h-[140px] flex flex-col items-center justify-center shadow-lg transition-all duration-500 ${theme.bg} ${theme.border}`;
+    output.className = `text-2xl font-black uppercase tracking-wider ${theme.text}`;
     output.textContent = text;
 }
 
-function resetSelection() {
-    tapSelection = '';
-    stirrupSelection = '';
+function resetAll() {
+    tapSelection = ''; stirrupSelection = '';
     document.getElementById('tap-search').value = '';
     document.getElementById('stirrup-search').value = '';
-    populateDropdown('tap', '');
-    populateDropdown('stirrup', '');
-    displayMessage('Select conductors to find AMPACT', 'default');
+    updateDropdown('tap', '');
+    updateDropdown('stirrup', '');
+    displayResult('Awaiting Selection', 'default');
 }
 
 function handlePWAInstallUI() {
