@@ -1,20 +1,19 @@
 /**
- * AMPACT Service Worker - v6.3.5
- * Optimized for PWA Installation Triggers
+ * AMPACT Service Worker - v6.3.6
+ * Optimized for GitHub Pages subdirectories
  */
 
-const CACHE_NAME = 'ampact-cache-v6.3.5';
+const CACHE_NAME = 'ampact-cache-v6.3.6';
 const ASSETS = [
-  './',
-  './index.html',
-  './app.js',
-  './manifest.json',
-  './data.xlsx',
+  '/AMPACT.PWA/',
+  '/AMPACT.PWA/index.html',
+  '/AMPACT.PWA/app.js',
+  '/AMPACT.PWA/manifest.json',
+  '/AMPACT.PWA/data.xlsx',
   'https://cdn.tailwindcss.com',
   'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
 ];
 
-// Force immediate installation
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
@@ -22,7 +21,6 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Clean up old caches and take control immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => Promise.all(
@@ -32,15 +30,8 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Network-first strategy for the data file, cache-first for others
 self.addEventListener('fetch', (event) => {
-  if (event.request.url.includes('data.xlsx')) {
-    event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request))
-    );
-  } else {
-    event.respondWith(
-      caches.match(event.request).then((response) => response || fetch(event.request))
-    );
-  }
+  event.respondWith(
+    caches.match(event.request).then((response) => response || fetch(event.request))
+  );
 });
