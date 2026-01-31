@@ -1,6 +1,7 @@
 /**
- * AMPACT Selector - v6.3.2
+ * AMPACT Selector - v6.3.3
  * Created and Maintained by Donald Win
+ * Includes Kill-Switch Logic
  */
 let themedDatabase = {}; 
 let copperDatabase = {}; 
@@ -8,7 +9,7 @@ let conductorOptions = [];
 let selection1 = '';
 let selection2 = '';
 let deferredPrompt = null;
-const APP_VERSION = "v6.3.2";
+const APP_VERSION = "v6.3.3";
 
 const colorThemes = {
     'blue': { body: '#2563eb', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
@@ -38,6 +39,30 @@ function cleanCell(val) {
 }
 
 async function initApp() {
+    // --- KILL SWITCH CHECK ---
+    try {
+        const ksResponse = await fetch(`kill-switch.json?t=${Date.now()}`, { cache: 'no-store' });
+        if (ksResponse.ok) {
+            const status = await ksResponse.json();
+            if (status.disablePWA === true) {
+                document.body.innerHTML = `
+                    <div class="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-6 text-center">
+                        <div class="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-red-900/20">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </div>
+                        <h1 class="text-2xl font-black mb-2 tracking-tighter uppercase">Maintenance Required</h1>
+                        <p class="text-gray-400 text-sm max-w-xs leading-relaxed">This application has been temporarily disabled. Please check for updates or contact the administrator.</p>
+                        <div class="mt-8 text-[10px] font-bold text-gray-600 uppercase tracking-widest">${APP_VERSION}</div>
+                    </div>`;
+                return;
+            }
+        }
+    } catch (ksErr) {
+        console.warn("Kill switch unavailable (offline).");
+    }
+
     setupEventListeners();
     const vTag = document.getElementById('version-tag');
     if (vTag) vTag.textContent = APP_VERSION;
