@@ -1,14 +1,14 @@
 /**
- * AMPACT Selector - v6.2.0 (Restored Logic)
- * Surgical PWA addition only.
+ * AMPACT Selector - v6.3.2
+ * Created and Maintained by Donald Win
  */
-
 let themedDatabase = {}; 
 let copperDatabase = {}; 
 let conductorOptions = []; 
 let selection1 = '';
 let selection2 = '';
 let deferredPrompt = null;
+const APP_VERSION = "v6.3.2";
 
 const colorThemes = {
     'blue': { body: '#2563eb', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
@@ -33,23 +33,30 @@ function getDiameter(name) {
 }
 
 function cleanCell(val) {
-    return val === undefined || val === null ? "" : val.toString().trim();
+    if (val === undefined || val === null) return "";
+    return val.toString().trim();
 }
 
 async function initApp() {
     setupEventListeners();
+    const vTag = document.getElementById('version-tag');
+    if (vTag) vTag.textContent = APP_VERSION;
     await loadExcelData();
     setupPWA();
 }
 
 async function loadExcelData() {
     try {
-        const response = await fetch('data.xlsx');
+        const response = await fetch(`data.xlsx?t=${Date.now()}`);
+        if (!response.ok) throw new Error("File not found");
+        
         const arrayBuffer = await response.arrayBuffer();
         const data = new Uint8Array(arrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
         
         let rawOptionsMap = new Map();
+        themedDatabase = {};
+        copperDatabase = {};
 
         workbook.SheetNames.forEach(sheetName => {
             const lowName = sheetName.toLowerCase();
@@ -71,14 +78,12 @@ async function loadExcelData() {
                 const rowData = rows[r];
                 const rawTap = cleanCell(rowData[0]);
                 if (!rawTap || rawTap.toLowerCase().includes('cable size')) continue;
-                
                 const nTap = normalize(rawTap);
                 if (!rawOptionsMap.has(nTap)) rawOptionsMap.set(nTap, rawTap);
 
                 for (let c = 1; c < headers.length; c++) {
                     const rawStirrup = headers[c];
                     if (!rawStirrup || rawStirrup.toLowerCase().includes('cable size')) continue;
-                    
                     const nStirrup = normalize(rawStirrup);
                     if (!rawOptionsMap.has(nStirrup)) rawOptionsMap.set(nStirrup, rawStirrup);
 
@@ -95,14 +100,16 @@ async function loadExcelData() {
         conductorOptions = Array.from(rawOptionsMap.values()).sort();
         updateList('tap', '');
         updateList('stirrup', '');
+        displayResult('Ready', 'default', false);
     } catch (e) {
-        console.error("Excel Load Error", e);
+        console.error("Load Error:", e);
+        displayResult('EXCEL ERROR', 'default', false);
     }
 }
 
 function calculate() {
     if (!selection1 || !selection2) {
-        displayResult('Ready', 'default');
+        displayResult('Ready', 'default', false);
         return;
     }
     const n1 = normalize(selection1), n2 = normalize(selection2);
@@ -118,7 +125,9 @@ function calculate() {
         }
     }
     
-    if (val && (val.toLowerCase().includes("copper") || val.toLowerCase().includes("refer")) || !val) {
+    const isRedirect = val && (val.toLowerCase().includes("copper") || val.toLowerCase().includes("refer"));
+    
+    if (isRedirect || !val) {
         for (let key of pairs) {
             if (copperDatabase[key]) {
                 val = copperDatabase[key];
@@ -128,53 +137,109 @@ function calculate() {
         }
     }
 
-    if (val) displayResult(val, theme);
-    else displayResult('No Match', 'default');
+    if (val) displayResult(val, theme, true);
+    else displayResult('No Match', 'default', false);
 }
 
 function updateList(type, filter) {
     const listEl = document.getElementById(`${type}-list`);
     const inputEl = document.getElementById(`${type}-search`);
+    const clearBtn = document.getElementById(`${type}-clear`);
+    
+    if (clearBtn) clearBtn.classList.toggle('hidden', !filter);
     if (!listEl) return;
 
     listEl.innerHTML = '';
-    const matches = conductorOptions.filter(name => name.toLowerCase().includes(filter.toLowerCase()));
+    const f = filter.toLowerCase();
+    const matches = conductorOptions.filter(name => name.toLowerCase().includes(f));
 
-    matches.forEach(name => {
+    if (matches.length === 0) {
         const div = document.createElement('div');
-        div.className = "p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-50 text-gray-800 font-bold text-sm";
-        div.textContent = name;
-        div.onclick = () => {
-            inputEl.value = name;
-            if (type === 'tap') selection1 = name; else selection2 = name;
-            listEl.classList.add('hidden'); 
-            calculate();
-        };
+        div.className = "p-3 text-gray-500 italic text-sm";
+        div.textContent = "No matches found";
         listEl.appendChild(div);
-    });
+    } else {
+        matches.forEach(name => {
+            const div = document.createElement('div');
+            div.className = "p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 text-gray-800 font-bold text-sm transition-colors";
+            div.textContent = name;
+            div.onclick = (e) => {
+                e.stopPropagation();
+                inputEl.value = name;
+                if (type === 'tap') selection1 = name; else selection2 = name;
+                listEl.classList.add('hidden'); 
+                if (clearBtn) clearBtn.classList.remove('hidden');
+                calculate();
+            };
+            listEl.appendChild(div);
+        });
+    }
 }
 
-function displayResult(text, key) {
+function displayResult(text, key, shouldFlash) {
     const output = document.getElementById('output');
     const box = document.getElementById('output-box');
+    const body = document.getElementById('body-bg');
     const theme = colorThemes[key] || colorThemes.default;
     
-    box.className = `rounded-[2rem] p-8 border-2 flex items-center justify-center min-h-[160px] transition-all duration-300 ${theme.bg} ${theme.border}`;
-    output.className = `font-black text-4xl uppercase tracking-tighter text-center ${theme.text}`;
-    output.textContent = text;
+    body.style.backgroundColor = theme.body;
+    box.classList.remove('flash-success');
+    
+    if (shouldFlash) {
+        void box.offsetWidth; 
+        box.classList.add('flash-success');
+    }
+    
+    box.className = `p-4 rounded-3xl border-4 text-center min-h-[180px] w-full flex flex-col items-center justify-center shadow-lg transition-all duration-300 ${theme.bg} ${theme.border}`;
+    
+    let displayStr = text;
+    if (key === 'copper') displayStr = text.replace(/copper|cu|see|sheet|chart|refer/gi, '').trim();
+    if (!displayStr) displayStr = "CHECK CHART";
+
+    output.innerHTML = '';
+    const parts = displayStr.split(/\s+/).filter(p => p.trim() !== "");
+    
+    if (parts.length > 1 && !displayStr.toLowerCase().includes("ready")) {
+        const cont = document.createElement('div');
+        cont.className = "flex flex-col gap-1 w-full items-center";
+        parts.forEach(p => {
+            const d = document.createElement('div');
+            d.className = `font-black uppercase tracking-tight ${theme.text} ${parts.length > 3 ? 'text-xl' : 'text-3xl'}`;
+            d.textContent = p;
+            cont.appendChild(d);
+        });
+        output.appendChild(cont);
+    } else {
+        const d = document.createElement('div');
+        d.className = `font-black uppercase ${theme.text} ${displayStr.length > 15 ? 'text-xl' : 'text-4xl'}`;
+        d.textContent = displayStr;
+        output.appendChild(d);
+    }
 }
 
 function setupEventListeners() {
     ['tap', 'stirrup'].forEach(type => {
         const input = document.getElementById(`${type}-search`);
         const list = document.getElementById(`${type}-list`);
+        const clear = document.getElementById(`${type}-clear`);
+
         input.addEventListener('input', (e) => {
             updateList(type, e.target.value);
             list.classList.remove('hidden');
         });
+
         input.addEventListener('focus', () => {
             updateList(type, input.value);
             list.classList.remove('hidden');
+        });
+
+        clear.addEventListener('click', (e) => {
+            e.stopPropagation();
+            input.value = '';
+            if (type === 'tap') selection1 = ''; else selection2 = '';
+            updateList(type, '');
+            clear.classList.add('hidden');
+            calculate();
         });
     });
 
@@ -184,21 +249,38 @@ function setupEventListeners() {
     });
 
     document.getElementById('reset-button').addEventListener('click', () => {
-        location.reload();
+        ['tap', 'stirrup'].forEach(type => {
+            const input = document.getElementById(`${type}-search`);
+            input.value = '';
+            document.getElementById(`${type}-clear`).classList.add('hidden');
+            document.getElementById(`${type}-list`).classList.add('hidden');
+        });
+        selection1 = ''; selection2 = '';
+        displayResult('Ready', 'default', false);
     });
 }
 
 function setupPWA() {
     const installBtn = document.getElementById('install-btn');
+    const iosInstr = document.getElementById('ios-install-instructions');
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    
+    if (isIos && !window.matchMedia('(display-mode: standalone)').matches) {
+        if (iosInstr) iosInstr.classList.remove('hidden');
+    }
+
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
         if (installBtn) installBtn.classList.remove('hidden');
     });
+
     if (installBtn) {
         installBtn.addEventListener('click', async () => {
             if (deferredPrompt) {
                 deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') installBtn.classList.add('hidden');
                 deferredPrompt = null;
             }
         });
