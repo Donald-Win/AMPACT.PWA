@@ -2,7 +2,7 @@
 "name": "AMPACT Selector",
 "short_name": "AMPACT",
 "description": "AMPACT Connector Selector Tool",
-"start_url": "/AMPACT.PWA/",
+"start_url": "./index.html",
 "display": "standalone",
 "background_color": "#2563eb",
 "theme_color": "#2563eb",
