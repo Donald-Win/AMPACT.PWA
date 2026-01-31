@@ -1,5 +1,5 @@
 /**
- * AMPACT Selector - v6.3.2
+ * AMPACT Selector - v6.3.3
  * Created and Maintained by Donald Win
  */
 let themedDatabase = {}; 
@@ -8,7 +8,7 @@ let conductorOptions = [];
 let selection1 = '';
 let selection2 = '';
 let deferredPrompt = null;
-const APP_VERSION = "v6.3.2";
+const APP_VERSION = "v6.3.3";
 
 const colorThemes = {
     'blue': { body: '#2563eb', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
@@ -168,7 +168,6 @@ function updateList(type, filter) {
                 inputEl.value = name;
                 if (type === 'tap') selection1 = name; else selection2 = name;
                 listEl.classList.add('hidden'); 
-                if (clearBtn) clearBtn.classList.remove('hidden');
                 calculate();
             };
             listEl.appendChild(div);
@@ -238,7 +237,6 @@ function setupEventListeners() {
             input.value = '';
             if (type === 'tap') selection1 = ''; else selection2 = '';
             updateList(type, '');
-            clear.classList.add('hidden');
             calculate();
         });
     });
@@ -264,16 +262,27 @@ function setupPWA() {
     const installBtn = document.getElementById('install-btn');
     const iosInstr = document.getElementById('ios-install-instructions');
     const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    
-    if (isIos && !window.matchMedia('(display-mode: standalone)').matches) {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+
+    // Logic for iOS (No automated prompt exists)
+    if (isIos && !isStandalone) {
         if (iosInstr) iosInstr.classList.remove('hidden');
     }
 
+    // Logic for Android/Chrome
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
         if (installBtn) installBtn.classList.remove('hidden');
     });
+
+    // Fallback: If after 3 seconds no prompt has been fired, and we aren't standalone, show button
+    setTimeout(() => {
+        if (!isStandalone && !isIos && installBtn && installBtn.classList.contains('hidden')) {
+            installBtn.classList.remove('hidden');
+            installBtn.textContent = "How to Install"; // Change text to reflect manual instruction
+        }
+    }, 3000);
 
     if (installBtn) {
         installBtn.addEventListener('click', async () => {
@@ -282,6 +291,12 @@ function setupPWA() {
                 const { outcome } = await deferredPrompt.userChoice;
                 if (outcome === 'accepted') installBtn.classList.add('hidden');
                 deferredPrompt = null;
+            } else {
+                // Manual Instruction Dialog
+                const msg = isIos 
+                    ? "On iOS: Tap the 'Share' icon and select 'Add to Home Screen'." 
+                    : "On Android/Desktop: Open your browser menu (three dots) and select 'Install App' or 'Add to Home Screen'.";
+                alert(msg);
             }
         });
     }
