@@ -1,5 +1,5 @@
 /**
- * Ducky's AMPACT Selector - Core Logic v2.0.6
+ * Ducky's AMPACT Selector - Core Logic v2.0.7
  */
 
 let spreadsheetData = [];
@@ -70,20 +70,18 @@ function setupEventListeners() {
     const tapSelect = document.getElementById('tap-select');
     const stirrupSelect = document.getElementById('stirrup-select');
 
-    // REFACTORED: Immediate reactive narrowing
+    // Live reactive narrowing
     tapSearch.addEventListener('input', (e) => {
-        const query = e.target.value;
-        updateDropdown('tap', query);
+        updateDropdown('tap', e.target.value);
         handleSearchAnimation(tapSelect);
     });
 
     stirrupSearch.addEventListener('input', (e) => {
-        const query = e.target.value;
-        updateDropdown('stirrup', query);
+        updateDropdown('stirrup', e.target.value);
         handleSearchAnimation(stirrupSelect);
     });
 
-    // Handle Selection Changes
+    // Selection Changes
     tapSelect.addEventListener('change', (e) => { 
         tapSelection = e.target.value; 
         calculate(); 
@@ -104,20 +102,16 @@ function handleSearchAnimation(element) {
 
 /**
  * Dynamically rebuilds the select options based on search query.
- * Updated to be more resilient and provide feedback for empty results.
  */
 function updateDropdown(type, query) {
     const select = document.getElementById(`${type}-select`);
     if (!spreadsheetData || !spreadsheetData.length) return;
 
-    // The first property of the first object is assumed to be the Conductor Name
     const conductorKey = Object.keys(spreadsheetData[0])[0];
     const previousSelection = select.value;
 
-    // Reset list
     select.innerHTML = '';
     
-    // Filter logic
     const filteredResults = spreadsheetData.filter(row => {
         const val = String(row[conductorKey] || "");
         return val.toLowerCase().includes(query.toLowerCase());
@@ -129,11 +123,14 @@ function updateDropdown(type, query) {
         opt.textContent = "No matches found";
         select.appendChild(opt);
     } else {
-        // Add default prompt
-        const promptOpt = document.createElement('option');
-        promptOpt.value = "";
-        promptOpt.textContent = query ? `Matches for "${query}"...` : "Select Conductor...";
-        select.appendChild(promptOpt);
+        // Only show "Select Conductor" prompt if search is empty
+        // If searching, show the first result immediately for easier tapping
+        if (!query) {
+            const promptOpt = document.createElement('option');
+            promptOpt.value = "";
+            promptOpt.textContent = "Select Conductor...";
+            select.appendChild(promptOpt);
+        }
 
         filteredResults.forEach(row => {
             const name = row[conductorKey];
@@ -144,13 +141,12 @@ function updateDropdown(type, query) {
         });
     }
 
-    // Smart persistence: If the previously selected value is still in the new list, keep it selected
+    // Keep current selection if it matches new filter
     if (previousSelection) {
         const exists = Array.from(select.options).some(o => o.value === previousSelection);
         if (exists) {
             select.value = previousSelection;
         } else {
-            // If it disappeared from the filtered list, we must clear the global selection
             if (type === 'tap') tapSelection = '';
             else stirrupSelection = '';
             calculate();
@@ -166,8 +162,6 @@ function calculate() {
 
     const conductorKey = Object.keys(spreadsheetData[0])[0];
     const row = spreadsheetData.find(r => r[conductorKey] === tapSelection);
-    
-    // The result is stored in the column named after the stirrup selection
     const val = row ? row[stirrupSelection] : null;
 
     if (val && String(val).trim() !== "") {
@@ -191,7 +185,6 @@ function displayResult(text, key) {
     const box = document.getElementById('output-box');
     const theme = colorThemes[key];
 
-    // Apply Tailwind classes dynamically
     box.className = `p-8 rounded-2xl border-4 text-center min-h-[140px] flex flex-col items-center justify-center shadow-lg transition-all duration-500 ${theme.bg} ${theme.border}`;
     output.className = `text-2xl font-black uppercase tracking-wider ${theme.text}`;
     output.textContent = text;
@@ -200,12 +193,8 @@ function displayResult(text, key) {
 function resetAll() {
     tapSelection = ''; 
     stirrupSelection = '';
-    const tapSearch = document.getElementById('tap-search');
-    const stirSearch = document.getElementById('stirrup-search');
-    
-    if (tapSearch) tapSearch.value = '';
-    if (stirSearch) stirSearch.value = '';
-    
+    document.getElementById('tap-search').value = '';
+    document.getElementById('stirrup-search').value = '';
     updateDropdown('tap', '');
     updateDropdown('stirrup', '');
     displayResult('Awaiting Selection', 'default');
