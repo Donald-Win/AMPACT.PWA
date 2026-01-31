@@ -1,24 +1,28 @@
 /**
- * Ducky's AMPACT Selector - v4.1.0
- * Feature: Automatic Theme Detection from Excel Cell Colors
+ * Ducky's AMPACT Selector - v4.2.0
+ * Feature: Enhanced Excel Parsing for Multiple Tabs & Theme Colors
  */
 let spreadsheetData = [];
 let tapSelection = '';
 let stirrupSelection = '';
 let deferredPrompt = null;
 
-// Mapping Excel Hex Colors to App Themes
+// Mapping Excel Colors (Hex or Theme-based index) to App Themes
 const colorMap = {
-    'FFFF00': 'yellow',  // Yellow
+    'FFFF00': 'yellow',
     'FFFFFF00': 'yellow',
-    'FFFF0000': 'red',   // Red
-    'FF0000FF': 'blue',  // Blue
-    'FF00B0F0': 'blue',  // Cyan/Light Blue
-    'FF0070C0': 'blue',  // Darker Blue
-    'FFED7D31': 'copper',// Orange/Copper
-    'FFC00000': 'red',   // Dark Red
-    'FFFFFFFF': 'white', // White
-    'FF000000': 'default'
+    'FFFF0000': 'red',
+    'FF0000FF': 'blue',
+    'FF00B0F0': 'blue',
+    'FF0070C0': 'blue',
+    'FFED7D31': 'copper',
+    'FFC00000': 'red',
+    'FFFFFFFF': 'white',
+    // Excel Theme indices often used for standard colors
+    'theme-4': 'blue',
+    'theme-5': 'red',
+    'theme-6': 'yellow',
+    'theme-8': 'copper'
 };
 
 const colorThemes = {
@@ -46,24 +50,27 @@ async function loadExcelData() {
         const data = new Uint8Array(arrayBuffer);
         const workbook = XLSX.read(data, { type: 'array', cellStyles: true });
         
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
+        // Target the specific "Main" sheet if it exists, otherwise use the first one
+        const mainSheetName = workbook.SheetNames.find(n => n.includes('Main') || n.includes('x-ref')) || workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[mainSheetName];
         
         const range = XLSX.utils.decode_range(worksheet['!ref']);
         const rows = [];
         const headers = [];
 
-        // Identify Headers (Row 0)
+        // 1. Clean Headers
         for (let C = range.s.c; C <= range.e.c; ++C) {
             const cell = worksheet[XLSX.utils.encode_cell({ r: range.s.r, c: C })];
+            // Remove \n and extra spaces from headers
             const headerText = cell ? cell.v.toString().replace(/\r?\n|\r/g, ' ').replace(/\s+/g, ' ').trim() : `Col${C}`;
             headers.push(headerText);
         }
 
-        // Process Data Rows
+        // 2. Extract Data and Styles
         for (let R = range.s.r + 1; R <= range.e.r; ++R) {
             const rowData = { _styles: {} };
             let hasData = false;
+            
             for (let C = range.s.c; C <= range.e.c; ++C) {
                 const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
                 const cell = worksheet[cellAddress];
@@ -77,9 +84,18 @@ async function loadExcelData() {
                 rowData[header] = val;
                 if (val !== "") hasData = true;
                 
-                // Extract Background Color
-                if (cell && cell.s && cell.s.fill && cell.s.fill.fgColor) {
-                    rowData._styles[header] = cell.s.fill.fgColor.rgb || cell.s.fill.fgColor.theme;
+                // Style Extraction
+                if (cell && cell.s && cell.s.fill) {
+                    if (cell.s.fill.fgColor) {
+                        // Priority 1: Hex RGB
+                        if (cell.s.fill.fgColor.rgb) {
+                            rowData._styles[header] = cell.s.fill.fgColor.rgb;
+                        } 
+                        // Priority 2: Theme Index
+                        else if (cell.s.fill.fgColor.theme !== undefined) {
+                            rowData._styles[header] = `theme-${cell.s.fill.fgColor.theme}`;
+                        }
+                    }
                 }
             }
             if (hasData) rows.push(rowData);
@@ -90,7 +106,7 @@ async function loadExcelData() {
         updateDropdown('stirrup', '');
         displayResult('Ready', 'default');
     } catch (e) {
-        console.error(e);
+        console.error("Excel Parsing Error:", e);
         displayResult('Excel Error', 'default');
     }
 }
@@ -110,16 +126,16 @@ function calculate() {
     }
 
     const value = row[stirrupSelection];
-    const hexColor = row._styles[stirrupSelection];
+    const styleKey = row._styles[stirrupSelection];
 
     if (value !== undefined && value !== null && String(value).trim() !== "") {
         let themeKey = 'default';
 
-        // 1. Theme by Excel Hex
-        if (hexColor && colorMap[hexColor]) {
-            themeKey = colorMap[hexColor];
+        // 1. Check colorMap for Hex or Theme index
+        if (styleKey && colorMap[styleKey]) {
+            themeKey = colorMap[styleKey];
         } 
-        // 2. Fallback: Word detection
+        // 2. Fallback: Word detection (for copper/blue/etc written in cell)
         else {
             const lowVal = String(value).toLowerCase();
             if (lowVal.includes('blue')) themeKey = 'blue';
@@ -129,35 +145,11 @@ function calculate() {
             else if (lowVal.includes('copper')) themeKey = 'copper';
         }
 
-        // Clean text output
         const cleanVal = String(value).replace(/\b(blue|yellow|white|red|copper)\b/gi, '').trim();
         displayResult(cleanVal, themeKey);
     } else {
         displayResult('No Match', 'default');
     }
-}
-
-function setupEventListeners() {
-    document.getElementById('tap-search').addEventListener('input', (e) => updateDropdown('tap', e.target.value));
-    document.getElementById('stirrup-search').addEventListener('input', (e) => updateDropdown('stirrup', e.target.value));
-    document.getElementById('tap-select').addEventListener('change', (e) => { tapSelection = e.target.value; calculate(); });
-    document.getElementById('stirrup-select').addEventListener('change', (e) => { stirrupSelection = e.target.value; calculate(); });
-    document.getElementById('reset-button').addEventListener('click', resetAll);
-    
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        document.getElementById('install-button').style.display = 'block';
-    });
-
-    document.getElementById('install-button').addEventListener('click', async () => {
-        if (deferredPrompt) {
-            deferredPrompt.prompt();
-            await deferredPrompt.userChoice;
-            deferredPrompt = null;
-            document.getElementById('install-button').style.display = 'none';
-        }
-    });
 }
 
 function updateDropdown(type, query) {
@@ -168,22 +160,38 @@ function updateDropdown(type, query) {
     const prev = select.value;
     select.innerHTML = '';
     
-    const filtered = spreadsheetData.filter(row => 
-        String(row[conductorKey] || "").toLowerCase().includes(query.toLowerCase())
-    );
-    
-    const promptOpt = document.createElement('option');
-    promptOpt.value = "";
-    promptOpt.textContent = query ? `Matches for "${query}"...` : "Select Conductor...";
-    select.appendChild(promptOpt);
-    
-    filtered.forEach(row => {
-        const val = String(row[conductorKey]).trim();
-        const opt = document.createElement('option');
-        opt.value = val;
-        opt.textContent = val;
-        select.appendChild(opt);
-    });
+    // Create a list of all column headers for the "Stirrup" (Small Side) dropdown
+    if (type === 'stirrup') {
+        const headers = Object.keys(spreadsheetData[0]).filter(k => k !== '_styles' && k !== conductorKey);
+        const promptOpt = document.createElement('option');
+        promptOpt.value = "";
+        promptOpt.textContent = "Select Conductor...";
+        select.appendChild(promptOpt);
+
+        headers.filter(h => h.toLowerCase().includes(query.toLowerCase())).forEach(h => {
+            const opt = document.createElement('option');
+            opt.value = h;
+            opt.textContent = h;
+            select.appendChild(opt);
+        });
+    } else {
+        // Handle "Tap" (Large Side) dropdown from the first column values
+        const filtered = spreadsheetData.filter(row => 
+            String(row[conductorKey] || "").toLowerCase().includes(query.toLowerCase())
+        );
+        const promptOpt = document.createElement('option');
+        promptOpt.value = "";
+        promptOpt.textContent = "Select Conductor...";
+        select.appendChild(promptOpt);
+
+        filtered.forEach(row => {
+            const val = String(row[conductorKey]).trim();
+            const opt = document.createElement('option');
+            opt.value = val;
+            opt.textContent = val;
+            select.appendChild(opt);
+        });
+    }
 
     if (prev && Array.from(select.options).some(o => o.value === prev)) select.value = prev;
 }
@@ -208,6 +216,14 @@ function displayResult(text, key) {
     const isDark = (key === 'blue' || key === 'red' || key === 'copper');
     if (githubLink) githubLink.style.color = isDark ? '#fff' : '';
     if (versionDisp) versionDisp.style.color = isDark ? '#fff' : '';
+}
+
+function setupEventListeners() {
+    document.getElementById('tap-search').addEventListener('input', (e) => updateDropdown('tap', e.target.value));
+    document.getElementById('stirrup-search').addEventListener('input', (e) => updateDropdown('stirrup', e.target.value));
+    document.getElementById('tap-select').addEventListener('change', (e) => { tapSelection = e.target.value; calculate(); });
+    document.getElementById('stirrup-select').addEventListener('change', (e) => { stirrupSelection = e.target.value; calculate(); });
+    document.getElementById('reset-button').addEventListener('click', resetAll);
 }
 
 function resetAll() {
