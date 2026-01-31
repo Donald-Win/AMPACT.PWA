@@ -1,14 +1,14 @@
 /**
- * AMPACT Selector - v6.3.9
- * Fix: Restored stable relative pathing for Excel loading
+ * AMPACT Selector - v6.2.0 (Restored Logic)
+ * Surgical PWA addition only.
  */
+
 let themedDatabase = {}; 
 let copperDatabase = {}; 
 let conductorOptions = []; 
 let selection1 = '';
 let selection2 = '';
 let deferredPrompt = null;
-const APP_VERSION = "v6.3.9";
 
 const colorThemes = {
     'blue': { body: '#2563eb', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
@@ -33,31 +33,23 @@ function getDiameter(name) {
 }
 
 function cleanCell(val) {
-    if (val === undefined || val === null) return "";
-    return val.toString().trim();
+    return val === undefined || val === null ? "" : val.toString().trim();
 }
 
 async function initApp() {
     setupEventListeners();
-    const vTag = document.getElementById('version-tag');
-    if (vTag) vTag.textContent = APP_VERSION;
     await loadExcelData();
     setupPWA();
 }
 
 async function loadExcelData() {
     try {
-        // Use relative path to ensure GitHub Pages finds it in the same folder
         const response = await fetch('data.xlsx');
-        if (!response.ok) throw new Error("Excel file not found");
-        
         const arrayBuffer = await response.arrayBuffer();
         const data = new Uint8Array(arrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
         
         let rawOptionsMap = new Map();
-        themedDatabase = {};
-        copperDatabase = {};
 
         workbook.SheetNames.forEach(sheetName => {
             const lowName = sheetName.toLowerCase();
@@ -79,12 +71,14 @@ async function loadExcelData() {
                 const rowData = rows[r];
                 const rawTap = cleanCell(rowData[0]);
                 if (!rawTap || rawTap.toLowerCase().includes('cable size')) continue;
+                
                 const nTap = normalize(rawTap);
                 if (!rawOptionsMap.has(nTap)) rawOptionsMap.set(nTap, rawTap);
 
                 for (let c = 1; c < headers.length; c++) {
                     const rawStirrup = headers[c];
                     if (!rawStirrup || rawStirrup.toLowerCase().includes('cable size')) continue;
+                    
                     const nStirrup = normalize(rawStirrup);
                     if (!rawOptionsMap.has(nStirrup)) rawOptionsMap.set(nStirrup, rawStirrup);
 
@@ -101,17 +95,14 @@ async function loadExcelData() {
         conductorOptions = Array.from(rawOptionsMap.values()).sort();
         updateList('tap', '');
         updateList('stirrup', '');
-        console.log("Data loaded successfully");
     } catch (e) {
-        console.error("Data Load Error:", e);
-        const output = document.getElementById('output');
-        output.innerHTML = '<div class="text-red-500 text-sm">Error loading data.xlsx. Please check file location.</div>';
+        console.error("Excel Load Error", e);
     }
 }
 
 function calculate() {
     if (!selection1 || !selection2) {
-        displayResult('Ready', 'default', false);
+        displayResult('Ready', 'default');
         return;
     }
     const n1 = normalize(selection1), n2 = normalize(selection2);
@@ -137,8 +128,8 @@ function calculate() {
         }
     }
 
-    if (val) displayResult(val, theme, true);
-    else displayResult('No Match', 'default', false);
+    if (val) displayResult(val, theme);
+    else displayResult('No Match', 'default');
 }
 
 function updateList(type, filter) {
@@ -147,40 +138,30 @@ function updateList(type, filter) {
     if (!listEl) return;
 
     listEl.innerHTML = '';
-    const f = filter.toLowerCase();
-    const matches = conductorOptions.filter(name => name.toLowerCase().includes(f));
+    const matches = conductorOptions.filter(name => name.toLowerCase().includes(filter.toLowerCase()));
 
-    if (matches.length === 0) {
+    matches.forEach(name => {
         const div = document.createElement('div');
-        div.className = "p-3 text-gray-500 italic text-sm";
-        div.textContent = "No matches found";
+        div.className = "p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-50 text-gray-800 font-bold text-sm";
+        div.textContent = name;
+        div.onclick = () => {
+            inputEl.value = name;
+            if (type === 'tap') selection1 = name; else selection2 = name;
+            listEl.classList.add('hidden'); 
+            calculate();
+        };
         listEl.appendChild(div);
-    } else {
-        matches.forEach(name => {
-            const div = document.createElement('div');
-            div.className = "p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 text-gray-800 font-bold text-sm";
-            div.textContent = name;
-            div.onclick = () => {
-                inputEl.value = name;
-                if (type === 'tap') selection1 = name; else selection2 = name;
-                listEl.classList.add('hidden'); 
-                calculate();
-            };
-            listEl.appendChild(div);
-        });
-    }
+    });
 }
 
-function displayResult(text, key, shouldFlash) {
+function displayResult(text, key) {
     const output = document.getElementById('output');
     const box = document.getElementById('output-box');
-    const body = document.getElementById('body-bg');
     const theme = colorThemes[key] || colorThemes.default;
     
-    body.style.backgroundColor = theme.body;
-    box.className = `p-4 rounded-3xl border-4 text-center min-h-[180px] w-full flex flex-col items-center justify-center shadow-lg transition-all duration-300 ${theme.bg} ${theme.border}`;
-    
-    output.innerHTML = `<div class="font-black uppercase ${theme.text} text-3xl">${text}</div>`;
+    box.className = `rounded-[2rem] p-8 border-2 flex items-center justify-center min-h-[160px] transition-all duration-300 ${theme.bg} ${theme.border}`;
+    output.className = `font-black text-4xl uppercase tracking-tighter text-center ${theme.text}`;
+    output.textContent = text;
 }
 
 function setupEventListeners() {
@@ -219,8 +200,6 @@ function setupPWA() {
             if (deferredPrompt) {
                 deferredPrompt.prompt();
                 deferredPrompt = null;
-            } else {
-                alert("To install: Tap the three dots (⋮) in Chrome and select 'Install App'.");
             }
         });
     }
