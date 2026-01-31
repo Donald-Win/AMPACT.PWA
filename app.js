@@ -1,6 +1,6 @@
 /**
- * AMPACT Selector - v6.3.7
- * Fix: Reverted to relative paths to restore functionality
+ * AMPACT Selector - v6.3.9
+ * Fix: Restored stable relative pathing for Excel loading
  */
 let themedDatabase = {}; 
 let copperDatabase = {}; 
@@ -8,7 +8,7 @@ let conductorOptions = [];
 let selection1 = '';
 let selection2 = '';
 let deferredPrompt = null;
-const APP_VERSION = "v6.3.7";
+const APP_VERSION = "v6.3.9";
 
 const colorThemes = {
     'blue': { body: '#2563eb', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
@@ -47,8 +47,9 @@ async function initApp() {
 
 async function loadExcelData() {
     try {
-        const response = await fetch(`./data.xlsx?t=${Date.now()}`);
-        if (!response.ok) throw new Error("File not found");
+        // Use relative path to ensure GitHub Pages finds it in the same folder
+        const response = await fetch('data.xlsx');
+        if (!response.ok) throw new Error("Excel file not found");
         
         const arrayBuffer = await response.arrayBuffer();
         const data = new Uint8Array(arrayBuffer);
@@ -100,10 +101,11 @@ async function loadExcelData() {
         conductorOptions = Array.from(rawOptionsMap.values()).sort();
         updateList('tap', '');
         updateList('stirrup', '');
-        displayResult('Ready', 'default', false);
+        console.log("Data loaded successfully");
     } catch (e) {
-        console.error("Load Error:", e);
-        displayResult('EXCEL ERROR', 'default', false);
+        console.error("Data Load Error:", e);
+        const output = document.getElementById('output');
+        output.innerHTML = '<div class="text-red-500 text-sm">Error loading data.xlsx. Please check file location.</div>';
     }
 }
 
@@ -142,9 +144,6 @@ function calculate() {
 function updateList(type, filter) {
     const listEl = document.getElementById(`${type}-list`);
     const inputEl = document.getElementById(`${type}-search`);
-    const clearBtn = document.getElementById(`${type}-clear`);
-    
-    if (clearBtn) clearBtn.classList.toggle('hidden', !filter);
     if (!listEl) return;
 
     listEl.innerHTML = '';
@@ -159,10 +158,9 @@ function updateList(type, filter) {
     } else {
         matches.forEach(name => {
             const div = document.createElement('div');
-            div.className = "p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 text-gray-800 font-bold text-sm transition-colors";
+            div.className = "p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 text-gray-800 font-bold text-sm";
             div.textContent = name;
-            div.onclick = (e) => {
-                e.stopPropagation();
+            div.onclick = () => {
                 inputEl.value = name;
                 if (type === 'tap') selection1 = name; else selection2 = name;
                 listEl.classList.add('hidden'); 
@@ -180,62 +178,22 @@ function displayResult(text, key, shouldFlash) {
     const theme = colorThemes[key] || colorThemes.default;
     
     body.style.backgroundColor = theme.body;
-    box.classList.remove('flash-success');
-    
-    if (shouldFlash) {
-        void box.offsetWidth; 
-        box.classList.add('flash-success');
-    }
-    
     box.className = `p-4 rounded-3xl border-4 text-center min-h-[180px] w-full flex flex-col items-center justify-center shadow-lg transition-all duration-300 ${theme.bg} ${theme.border}`;
     
-    let displayStr = text;
-    if (key === 'copper') displayStr = text.replace(/copper|cu|see|sheet|chart|refer/gi, '').trim();
-    if (!displayStr) displayStr = "CHECK CHART";
-
-    output.innerHTML = '';
-    const parts = displayStr.split(/\s+/).filter(p => p.trim() !== "");
-    
-    if (parts.length > 1 && !displayStr.toLowerCase().includes("ready")) {
-        const cont = document.createElement('div');
-        cont.className = "flex flex-col gap-1 w-full items-center";
-        parts.forEach(p => {
-            const d = document.createElement('div');
-            d.className = `font-black uppercase tracking-tight ${theme.text} ${parts.length > 3 ? 'text-xl' : 'text-3xl'}`;
-            d.textContent = p;
-            cont.appendChild(d);
-        });
-        output.appendChild(cont);
-    } else {
-        const d = document.createElement('div');
-        d.className = `font-black uppercase ${theme.text} ${displayStr.length > 15 ? 'text-xl' : 'text-4xl'}`;
-        d.textContent = displayStr;
-        output.appendChild(d);
-    }
+    output.innerHTML = `<div class="font-black uppercase ${theme.text} text-3xl">${text}</div>`;
 }
 
 function setupEventListeners() {
     ['tap', 'stirrup'].forEach(type => {
         const input = document.getElementById(`${type}-search`);
         const list = document.getElementById(`${type}-list`);
-        const clear = document.getElementById(`${type}-clear`);
-
         input.addEventListener('input', (e) => {
             updateList(type, e.target.value);
             list.classList.remove('hidden');
         });
-
         input.addEventListener('focus', () => {
             updateList(type, input.value);
             list.classList.remove('hidden');
-        });
-
-        clear.addEventListener('click', (e) => {
-            e.stopPropagation();
-            input.value = '';
-            if (type === 'tap') selection1 = ''; else selection2 = '';
-            updateList(type, '');
-            calculate();
         });
     });
 
@@ -245,57 +203,25 @@ function setupEventListeners() {
     });
 
     document.getElementById('reset-button').addEventListener('click', () => {
-        ['tap', 'stirrup'].forEach(type => {
-            const input = document.getElementById(`${type}-search`);
-            input.value = '';
-            document.getElementById(`${type}-clear`).classList.add('hidden');
-            document.getElementById(`${type}-list`).classList.add('hidden');
-        });
-        selection1 = ''; selection2 = '';
-        displayResult('Ready', 'default', false);
+        location.reload();
     });
 }
 
 function setupPWA() {
     const installBtn = document.getElementById('install-btn');
-    const iosInstr = document.getElementById('ios-install-instructions');
-    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-
-    if (isIos && !isStandalone) {
-        if (iosInstr) iosInstr.classList.remove('hidden');
-    }
-
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
-        if (!isStandalone && !isIos && installBtn) {
-            installBtn.classList.remove('hidden');
-        }
+        if (installBtn) installBtn.classList.remove('hidden');
     });
-
-    // Fallback visibility for Android/Chrome
-    setTimeout(() => {
-        if (!isStandalone && !isIos && installBtn && installBtn.classList.contains('hidden')) {
-            installBtn.classList.remove('hidden');
-        }
-    }, 3000);
-
     if (installBtn) {
         installBtn.addEventListener('click', async () => {
             if (deferredPrompt) {
                 deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') installBtn.classList.add('hidden');
                 deferredPrompt = null;
-            } else if (!isIos) {
-                alert("Please tap the three dots (⋮) in your browser menu and select 'Install App' or 'Add to Home Screen'.");
+            } else {
+                alert("To install: Tap the three dots (⋮) in Chrome and select 'Install App'.");
             }
         });
     }
-
-    window.addEventListener('appinstalled', () => {
-        if (installBtn) installBtn.classList.add('hidden');
-        deferredPrompt = null;
-    });
 }
