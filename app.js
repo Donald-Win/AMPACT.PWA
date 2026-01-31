@@ -1,6 +1,6 @@
 /**
- * Ducky's AMPACT Selector - Core Logic v2.0.11
- * Fixed PWA Install Logic
+ * Ducky's AMPACT Selector - Core Logic v2.0.12
+ * Fixed: Color words removal & Emerald Green button logic
  */
 let spreadsheetData = [];
 let tapSelection = '';
@@ -23,34 +23,26 @@ async function initApp() {
     setupEventListeners();
     await loadData();
     
-    // Check if already installed
     if (window.matchMedia('(display-mode: standalone)').matches) {
-        document.getElementById('install-button').style.display = 'none';
+        const installBtn = document.getElementById('install-button');
+        if (installBtn) installBtn.style.display = 'none';
     }
 }
 
-// 1. IMPROVED SERVICE WORKER REGISTRATION
 function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('service-worker.js')
-                .then(reg => console.log('SW Registered'))
-                .catch(err => console.log('SW Failed', err));
+            navigator.serviceWorker.register('service-worker.js').catch(() => {});
         });
     }
 }
 
-// 2. CAPTURING THE INSTALL PROMPT
 window.addEventListener('beforeinstallprompt', (e) => {
-    // Prevent Chrome 67 and earlier from automatically showing the prompt
     e.preventDefault();
-    // Stash the event so it can be triggered later.
     deferredPrompt = e;
-    // Show the install button
     const installBtn = document.getElementById('install-button');
     if (installBtn) {
         installBtn.style.display = 'block';
-        console.log('Install prompt is ready');
     }
 });
 
@@ -67,25 +59,19 @@ function setupEventListeners() {
     stirrupSelect.addEventListener('change', (e) => { stirrupSelection = e.target.value; calculate(); });
     document.getElementById('reset-button').addEventListener('click', resetAll);
 
-    // 3. UPDATED INSTALL CLICK HANDLER
     installBtn.addEventListener('click', async () => {
         if (!deferredPrompt) {
-            // Fallback for when the browser doesn't support the prompt or it hasn't fired yet
-            alert("To install: Tap the browser menu (3 dots) and select 'Install app' or 'Add to Home Screen'.");
+            // Fallback for browsers that don't support the automated prompt (like Firefox or some Android skins)
+            alert("To install: Tap the 3-dot menu in your browser and select 'Install app' or 'Add to Home Screen'.");
             return;
         }
-        // Show the prompt
         deferredPrompt.prompt();
-        // Wait for the user to respond to the prompt
         const { outcome } = await deferredPrompt.userChoice;
-        console.log(`User response to install: ${outcome}`);
-        // We've used the prompt, and can't use it again
         deferredPrompt = null;
-        installBtn.style.display = 'none';
+        if (outcome === 'accepted') installBtn.style.display = 'none';
     });
 }
 
-// Data loading and UI functions remain the same as previous version...
 async function loadData() {
     try {
         const response = await fetch(`data.json?t=${Date.now()}`);
@@ -94,7 +80,7 @@ async function loadData() {
         updateDropdown('stirrup', '');
         displayResult('Ready', 'default');
     } catch (e) {
-        displayResult('Error', 'default');
+        displayResult('Error Loading Data', 'default');
     }
 }
 
@@ -142,13 +128,19 @@ function calculate() {
     if (rawVal && String(rawVal).trim() !== "") {
         const valStr = String(rawVal);
         const lowerVal = valStr.toLowerCase();
+        
+        // 1. Determine Theme based on color word
         let key = 'default';
         if (lowerVal.includes('blue')) key = 'blue';
         else if (lowerVal.includes('yellow')) key = 'yellow';
         else if (lowerVal.includes('white')) key = 'white';
         else if (lowerVal.includes('red')) key = 'red';
         else if (lowerVal.includes('copper')) key = 'copper';
-        displayResult(valStr, key);
+        
+        // 2. STRICTOR COLOR REMOVAL: Remove color words from the displayed text
+        const cleanVal = valStr.replace(/\b(blue|yellow|white|red|copper)\b/gi, '').trim();
+        
+        displayResult(cleanVal, key);
     } else {
         displayResult('No Match', 'default');
     }
@@ -158,11 +150,17 @@ function displayResult(text, key) {
     const output = document.getElementById('output');
     const box = document.getElementById('output-box');
     const body = document.getElementById('body-bg');
+    const versionDisp = document.getElementById('version-display');
+    const githubLink = document.getElementById('github-link');
     const theme = colorThemes[key];
+    
     body.style.backgroundColor = theme.body;
     box.className = `p-8 rounded-2xl border-4 text-center min-h-[140px] flex flex-col items-center justify-center shadow-lg transition-all duration-500 ${theme.bg} ${theme.border}`;
     output.className = `text-3xl font-black uppercase tracking-widest ${theme.text}`;
     output.textContent = text;
+    
+    if (versionDisp) versionDisp.style.color = theme.footer === 'text-white' ? '#fff' : '';
+    if (githubLink) githubLink.style.color = theme.footer === 'text-white' ? '#fff' : '';
 }
 
 function resetAll() {
