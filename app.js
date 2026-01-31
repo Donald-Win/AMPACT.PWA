@@ -1,9 +1,9 @@
 /**
- * Ducky's AMPACT Selector - v5.2.0
- * Multi-Sheet Fallback Engine (Themed -> Copper Redirection)
+ * Ducky's AMPACT Selector - v5.3.0
+ * Multi-Result Stacked Engine (Vertical Display)
  */
-let themedDatabase = {}; // Maps "Tap|Stirrup" -> { value: "PartNo", theme: "color" }
-let copperDatabase = {}; // Separate map for the Copper Taps sheet
+let themedDatabase = {}; 
+let copperDatabase = {}; 
 let tapOptions = new Set();
 let stirrupOptions = new Set();
 let tapSelection = '';
@@ -54,7 +54,6 @@ async function loadExcelData() {
             const headers = rows[0].map(h => clean(h));
             const isCopperSheet = lowName.includes('copper');
             
-            // Determine theme from sheet name
             let theme = null;
             if (lowName.includes('yellow')) theme = 'yellow';
             else if (lowName.includes('blue')) theme = 'blue';
@@ -111,7 +110,6 @@ function calculate() {
         let text = entry.value;
         let theme = entry.theme;
 
-        // LOGIC: If themed sheet says "Refer Copper", pull from Copper database
         if (text.toLowerCase().includes("refer copper")) {
             const copperVal = copperDatabase[key];
             if (copperVal) {
@@ -122,10 +120,8 @@ function calculate() {
                 theme = 'copper';
             }
         }
-
         displayResult(text, theme);
     } else {
-        // Direct Copper lookup fallback (for pairs only in copper sheet)
         const copperOnly = copperDatabase[key];
         if (copperOnly) {
             displayResult(copperOnly, 'copper');
@@ -170,14 +166,37 @@ function displayResult(text, key) {
     const theme = colorThemes[key] || colorThemes.default;
     
     body.style.backgroundColor = theme.body;
-    box.className = `p-8 rounded-2xl border-4 text-center min-h-[140px] flex flex-col items-center justify-center shadow-lg transition-all duration-500 ${theme.bg} ${theme.border}`;
+    box.className = `p-8 rounded-2xl border-4 text-center min-h-[160px] flex flex-col items-center justify-center shadow-lg transition-all duration-500 ${theme.bg} ${theme.border}`;
     
-    if (text.length > 25) output.className = `font-black uppercase text-center ${theme.text} text-xs`;
-    else if (text.length > 18) output.className = `font-black uppercase text-center ${theme.text} text-base`;
-    else if (text.length > 10) output.className = `font-black uppercase text-center ${theme.text} text-2xl`;
-    else output.className = `font-black uppercase text-center ${theme.text} text-3xl`;
+    // Clear previous results
+    output.innerHTML = '';
     
-    output.textContent = text;
+    // Split text by multiple spaces (which Excel uses for multiple results)
+    const parts = text.split(/\s{2,}/).filter(p => p.trim() !== "");
+    
+    if (parts.length > 1) {
+        // Create vertical stack
+        parts.forEach((part, index) => {
+            const span = document.createElement('div');
+            span.className = `font-black uppercase tracking-tight py-1 ${theme.text} ${parts.length > 3 ? 'text-sm' : 'text-xl'}`;
+            span.textContent = part.trim();
+            output.appendChild(span);
+            // Add a divider except for the last one
+            if (index < parts.length - 1) {
+                const hr = document.createElement('div');
+                hr.className = `w-12 h-0.5 my-1 opacity-30 ${key === 'white' ? 'bg-gray-400' : 'bg-white'}`;
+                output.appendChild(hr);
+            }
+        });
+    } else {
+        // Single result display
+        const span = document.createElement('div');
+        span.textContent = text;
+        if (text.length > 25) span.className = `font-black uppercase ${theme.text} text-xs`;
+        else if (text.length > 18) span.className = `font-black uppercase ${theme.text} text-base`;
+        else span.className = `font-black uppercase ${theme.text} text-3xl`;
+        output.appendChild(span);
+    }
 }
 
 function setupEventListeners() {
