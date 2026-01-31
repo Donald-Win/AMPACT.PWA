@@ -14,7 +14,7 @@
         .flash-success { animation: flash-green 0.6s ease-out; }
         @keyframes flash-green {
             0% { background-color: #22c55e; border-color: #166534; transform: scale(1); }
-            50% { transform: scale(1.05); }
+            50% { transform: scale(1.08); }
             100% { transform: scale(1); }
         }
         select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236B7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 1rem; }
@@ -22,7 +22,7 @@
 </head>
 <body id="body-bg" class="min-h-screen flex flex-col items-center p-4 transition-colors duration-500">
 
-    <div class="w-full max-w-md mt-4 mb-8">
+    <div class="w-full max-w-md mt-4">
         <div class="bg-white rounded-[2.5rem] shadow-2xl p-8 border border-gray-100">
             <header class="text-center mb-8">
                 <h1 class="text-4xl font-black text-gray-900 tracking-tighter uppercase mb-1 whitespace-nowrap">AMPACT Selector</h1>
@@ -32,20 +32,14 @@
             <div class="space-y-6">
                 <div class="space-y-2">
                     <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Conductor 1</label>
-                    <input type="text" id="tap-search" placeholder="Search..." 
-                        class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl outline-none text-sm font-medium">
-                    <select id="tap-select" class="w-full px-4 py-4 bg-white border-2 border-gray-900 rounded-2xl font-bold text-gray-800">
-                        <option value="">Loading Data...</option>
-                    </select>
+                    <input type="text" id="tap-search" placeholder="Search..." class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl outline-none text-sm font-medium">
+                    <select id="tap-select" class="w-full px-4 py-4 bg-white border-2 border-gray-900 rounded-2xl font-bold text-gray-800"></select>
                 </div>
 
                 <div class="space-y-2">
                     <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Conductor 2</label>
-                    <input type="text" id="stirrup-search" placeholder="Search..." 
-                        class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl outline-none text-sm font-medium">
-                    <select id="stirrup-select" class="w-full px-4 py-4 bg-white border-2 border-gray-900 rounded-2xl font-bold text-gray-800">
-                        <option value="">Loading Data...</option>
-                    </select>
+                    <input type="text" id="stirrup-search" placeholder="Search..." class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl outline-none text-sm font-medium">
+                    <select id="stirrup-select" class="w-full px-4 py-4 bg-white border-2 border-gray-900 rounded-2xl font-bold text-gray-800"></select>
                 </div>
 
                 <div id="output-box" class="bg-gray-50 border-gray-200 border-4">
@@ -54,28 +48,29 @@
                     </div>
                 </div>
 
-                <button id="reset-button" class="w-full py-2 text-gray-400 font-black uppercase tracking-widest text-[10px]">
-                    Clear Selection
-                </button>
+                <button id="reset-button" class="w-full py-2 text-gray-400 font-black uppercase tracking-widest text-[10px] hover:text-gray-600">Clear Selection</button>
             </div>
         </div>
     </div>
 
-    <footer class="mt-auto py-6 text-center space-y-2">
-        <a href="https://github.com/donald-win/AMPACT.PWA" target="_blank" class="text-white/50 hover:text-white text-[10px] font-bold uppercase tracking-widest transition-colors block">
-            GitHub: AMPACT.PWA
-        </a>
-        <div id="version-tag" class="text-white/30 text-[10px] font-black uppercase tracking-widest">
-            v6.0.6
-        </div>
-    </footer>
+    <div class="w-full max-w-md mt-6 space-y-3">
+        <button id="install-btn" class="hidden w-full bg-gray-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-transform">
+            Install App
+        </button>
+        
+        <footer class="bg-black/80 backdrop-blur-md rounded-2xl p-4 text-center border border-white/10 shadow-lg">
+            <a href="https://github.com/donald-win/AMPACT.PWA" target="_blank" class="text-white hover:text-blue-400 text-[10px] font-bold uppercase tracking-widest transition-colors block mb-1">
+                GitHub: AMPACT.PWA
+            </a>
+            <div id="version-tag" class="text-white/40 text-[10px] font-black uppercase tracking-widest">
+                v6.1.0
+            </div>
+        </footer>
+    </div>
 
     <script>
-        // Register Service Worker for PWA
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW failed', err));
-            });
+            navigator.serviceWorker.register('./sw.js').catch(() => {});
         }
     </script>
     <script src="app.js"></script>
