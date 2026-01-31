@@ -1,5 +1,5 @@
 /**
- * AMPACT Selector - v6.0.2
+ * AMPACT Selector - v6.0.5
  * Created and Maintained by Donald Win
  */
 let themedDatabase = {}; 
@@ -7,7 +7,7 @@ let copperDatabase = {};
 let conductorOptions = []; 
 let selection1 = '';
 let selection2 = '';
-const APP_VERSION = "v6.0.2";
+const APP_VERSION = "v6.0.5";
 
 const colorThemes = {
     'blue': { body: '#2563eb', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
@@ -25,6 +25,16 @@ function normalize(str) {
     return str.toString().toLowerCase().replace(/\s+/g, '').replace(/[^\w\d]/g, '').trim();
 }
 
+/**
+ * Extracts diameter for size comparison to ensure order independence.
+ * Example: "185mm2 Ali (17.50 mm)" -> 17.50
+ */
+function getDiameter(name) {
+    if (!name) return 0;
+    const match = name.match(/\(([\d.]+)\s*mm/);
+    return match ? parseFloat(match[1]) : 0;
+}
+
 function cleanCell(val) {
     if (val === undefined || val === null) return "";
     if (typeof val === 'object') return "";
@@ -34,7 +44,7 @@ function cleanCell(val) {
 async function initApp() {
     setupEventListeners();
     const vTag = document.getElementById('version-tag');
-    if (vTag) vTag.textContent = `${APP_VERSION} (ULTIMATE)`;
+    if (vTag) vTag.textContent = `${APP_VERSION} (ORDER INDEPENDENT)`;
     await loadExcelData();
 }
 
@@ -107,14 +117,27 @@ function calculate() {
         return;
     }
 
+    const d1 = getDiameter(selection1);
+    const d2 = getDiameter(selection2);
     const n1 = normalize(selection1);
     const n2 = normalize(selection2);
-    const pairs = [`${n1}|${n2}`, `${n2}|${n1}`];
 
+    // Primary sorting: Treat larger diameter as "Tap" (left-side of key)
+    let primaryKey, secondaryKey;
+    if (d1 >= d2) {
+        primaryKey = `${n1}|${n2}`;
+        secondaryKey = `${n2}|${n1}`;
+    } else {
+        primaryKey = `${n2}|${n1}`;
+        secondaryKey = `${n1}|${n2}`;
+    }
+
+    const searchKeys = [primaryKey, secondaryKey];
     let val = "";
     let theme = "";
 
-    for (let key of pairs) {
+    // 1. Search themed database
+    for (let key of searchKeys) {
         const entry = themedDatabase[key];
         if (entry) {
             val = entry.value;
@@ -123,9 +146,10 @@ function calculate() {
         }
     }
 
+    // 2. Pivot to Copper if mentioned or if no match yet
     const isCopRef = val.toLowerCase().includes("copper") || val.toLowerCase().includes("refer");
     if (isCopRef || !val) {
-        for (let key of pairs) {
+        for (let key of searchKeys) {
             if (copperDatabase[key]) {
                 val = copperDatabase[key];
                 theme = 'copper';
