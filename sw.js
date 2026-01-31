@@ -1,10 +1,10 @@
 /**
  * AMPACT Service Worker - v6.3.5
- * Handles offline caching and PWA installation requirements.
+ * Optimized for PWA Installation Triggers
  */
 
-const CACHE_NAME = 'ampact-selector-v6.3.5';
-const ASSETS_TO_CACHE = [
+const CACHE_NAME = 'ampact-cache-v6.3.5';
+const ASSETS = [
   './',
   './index.html',
   './app.js',
@@ -14,42 +14,33 @@ const ASSETS_TO_CACHE = [
   'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
 ];
 
-// Install Event - Caching the app shell
+// Force immediate installation
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('SW: Caching App Shell');
-      return cache.addAll(ASSETS_TO_CACHE);
-    })
-  );
   self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+  );
 });
 
-// Activate Event - Cleaning up old caches
+// Clean up old caches and take control immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cache) => {
-          if (cache !== CACHE_NAME) {
-            console.log('SW: Clearing Old Cache', cache);
-            return caches.delete(cache);
-          }
-        })
-      );
-    })
+    caches.keys().then((keys) => Promise.all(
+      keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
+    ))
   );
-  return self.clients.claim();
+  self.clients.claim();
 });
 
-// Fetch Event - Offline First Strategy
+// Network-first strategy for the data file, cache-first for others
 self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      // Return cache or fetch from network
-      return response || fetch(event.request).catch(() => {
-        // Optional: fallback if both fail
-      });
-    })
-  );
+  if (event.request.url.includes('data.xlsx')) {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request))
+    );
+  } else {
+    event.respondWith(
+      caches.match(event.request).then((response) => response || fetch(event.request))
+    );
+  }
 });
