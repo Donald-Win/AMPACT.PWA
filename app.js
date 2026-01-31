@@ -1,5 +1,5 @@
 /**
- * Ducky's AMPACT Selector - Core Logic v2.0.4
+ * Ducky's AMPACT Selector - Core Logic v2.0.5
  */
 
 let spreadsheetData = [];
@@ -37,8 +37,11 @@ async function loadData() {
     try {
         const response = await fetch(`data.json?t=${Date.now()}`);
         spreadsheetData = await response.json();
+        
+        // Initial population of full lists
         updateDropdown('tap', '');
         updateDropdown('stirrup', '');
+        
         displayResult('Awaiting Selection', 'default');
     } catch (e) {
         displayResult('Data Error', 'default');
@@ -63,7 +66,7 @@ function setupEventListeners() {
     const tapSelect = document.getElementById('tap-select');
     const stirrupSelect = document.getElementById('stirrup-select');
 
-    // Live Filtering with Visual Feedback
+    // Reactive Narrowing: Rebuild list while typing
     tapSearch.addEventListener('input', (e) => {
         handleSearchAnimation(tapSelect);
         updateDropdown('tap', e.target.value);
@@ -74,38 +77,65 @@ function setupEventListeners() {
         updateDropdown('stirrup', e.target.value);
     });
 
-    tapSelect.addEventListener('change', (e) => { tapSelection = e.target.value; calculate(); });
-    stirrupSelect.addEventListener('change', (e) => { stirrupSelection = e.target.value; calculate(); });
+    // Handle Selections
+    tapSelect.addEventListener('change', (e) => { 
+        tapSelection = e.target.value; 
+        calculate(); 
+    });
+
+    stirrupSelect.addEventListener('change', (e) => { 
+        stirrupSelection = e.target.value; 
+        calculate(); 
+    });
 
     document.getElementById('reset-button').addEventListener('click', resetAll);
 }
 
 function handleSearchAnimation(element) {
     element.classList.add('filtering');
-    setTimeout(() => element.classList.remove('filtering'), 500);
+    setTimeout(() => element.classList.remove('filtering'), 400);
 }
 
+/**
+ * Dynamically rebuilds the select options based on search query
+ */
 function updateDropdown(type, query) {
     const select = document.getElementById(`${type}-select`);
-    const conductorKey = Object.keys(spreadsheetData[0])[0];
-    const currentVal = select.value;
+    if (!spreadsheetData.length) return;
 
+    // First key in the JSON is always the Cable/Conductor Name
+    const conductorKey = Object.keys(spreadsheetData[0])[0];
+    const previousSelection = select.value;
+
+    // Clear current options
     select.innerHTML = '<option value="">Select Conductor...</option>';
     
-    const filtered = spreadsheetData.filter(row => 
-        row[conductorKey].toLowerCase().includes(query.toLowerCase())
-    );
+    // Filter the original dataset based on the input query
+    const filteredResults = spreadsheetData.filter(row => {
+        const val = row[conductorKey] || "";
+        return val.toLowerCase().includes(query.toLowerCase());
+    });
 
-    filtered.forEach(row => {
+    // Populate with matches
+    filteredResults.forEach(row => {
+        const name = row[conductorKey];
         const opt = document.createElement('option');
-        opt.value = row[conductorKey];
-        opt.textContent = row[conductorKey];
+        opt.value = name;
+        opt.textContent = name;
         select.appendChild(opt);
     });
 
-    // Keep selection if it's still in the filtered list
-    if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
-        select.value = currentVal;
+    // Attempt to restore previous selection if it's still in the filtered view
+    if (previousSelection) {
+        const exists = Array.from(select.options).some(o => o.value === previousSelection);
+        if (exists) {
+            select.value = previousSelection;
+        } else {
+            // Selection was filtered out, update global state
+            if (type === 'tap') tapSelection = '';
+            else stirrupSelection = '';
+            calculate();
+        }
     }
 }
 
@@ -138,14 +168,14 @@ function displayResult(text, key) {
     const box = document.getElementById('output-box');
     const theme = colorThemes[key];
 
-    // Reset Box Classes (Clean Tailwind reset)
     box.className = `p-8 rounded-2xl border-4 text-center min-h-[140px] flex flex-col items-center justify-center shadow-lg transition-all duration-500 ${theme.bg} ${theme.border}`;
     output.className = `text-2xl font-black uppercase tracking-wider ${theme.text}`;
     output.textContent = text;
 }
 
 function resetAll() {
-    tapSelection = ''; stirrupSelection = '';
+    tapSelection = ''; 
+    stirrupSelection = '';
     document.getElementById('tap-search').value = '';
     document.getElementById('stirrup-search').value = '';
     updateDropdown('tap', '');
