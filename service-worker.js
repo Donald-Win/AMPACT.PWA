@@ -1,8 +1,9 @@
-const CACHE_NAME = 'ampact-selector-v4';
+const CACHE_NAME = 'ampact-v6.0.6';
 const ASSETS = [
-  'index.html',
-  'app.js',
-  'manifest.json',
+  './',
+  './index.html',
+  './app.js',
+  './manifest.json',
   'https://cdn.tailwindcss.com',
   'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
 ];
@@ -15,6 +16,8 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request))
+    caches.match(event.request).then((response) => {
+      return response || fetch(event.request);
+    })
   );
 });
