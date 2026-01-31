@@ -1,4 +1,5 @@
-const CACHE_NAME = 'ampact-selector-cache-v2'; // Incremented version
+// Version v2.0.1
+const CACHE_NAME = 'ampact-selector-v2-0-1';
 
 const urlsToCache = [
   './',
@@ -10,23 +11,20 @@ const urlsToCache = [
   'icons/icon-512x512.png',
 ];
 
-// Install: Cache essential assets
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(urlsToCache);
-    }).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
   );
 });
 
-// Activate: Clean up old caches
 self.addEventListener('activate', (event) => {
-  const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (!cacheWhitelist.includes(cacheName)) {
+          if (cacheName !== CACHE_NAME) {
+            console.log('SW: Purging old cache', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -35,13 +33,14 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch: Stale-While-Revalidate strategy
 self.addEventListener('fetch', (event) => {
-  // We don't cache the kill-switch to ensure it stays "live"
+  // Always let kill-switch go to network
   if (event.request.url.includes('kill-switch.json')) {
-    return event.respondWith(fetch(event.request));
+    event.respondWith(fetch(event.request));
+    return;
   }
 
+  // Stale-While-Revalidate Strategy
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.match(event.request).then((cachedResponse) => {
@@ -51,49 +50,11 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         }).catch(() => {
-            // If network fails, the cachedResponse (if any) will still be returned
+          // Network failed, silently fail so cachedResponse handles it
         });
 
-        // Return cached version immediately, update cache in background
         return cachedResponse || fetchPromise;
       });
     })
   );
-});  const cacheWhitelist = [CACHE_NAME];
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            // Delete old caches
-            console.log('SW: Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    }).then(() => {
-      // Claim control of all clients (tabs) immediately
-      console.log('SW: Calling self.clients.claim()');
-      return self.clients.claim(); 
-    })
-  );
 });
-
-// Fetch event: Serve cached assets or fetch from network
-self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Cache hit - return response
-        if (response) {
-          return response;
-        }
-        // No cache hit - fetch from network
-        return fetch(event.request);
-      })
-      .catch(err => {
-        console.error('SW: Fetch failed:', err);
-      })
-  );
-});
-
