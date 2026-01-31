@@ -1,5 +1,5 @@
 /**
- * AMPACT Selector - v6.3.4
+ * AMPACT Selector - v6.3.5
  * Created and Maintained by Donald Win
  */
 let themedDatabase = {}; 
@@ -8,7 +8,7 @@ let conductorOptions = [];
 let selection1 = '';
 let selection2 = '';
 let deferredPrompt = null;
-const APP_VERSION = "v6.3.4";
+const APP_VERSION = "v6.3.5";
 
 const colorThemes = {
     'blue': { body: '#2563eb', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
@@ -125,9 +125,7 @@ function calculate() {
         }
     }
     
-    const isRedirect = val && (val.toLowerCase().includes("copper") || val.toLowerCase().includes("refer"));
-    
-    if (isRedirect || !val) {
+    if (val && (val.toLowerCase().includes("copper") || val.toLowerCase().includes("refer")) || !val) {
         for (let key of pairs) {
             if (copperDatabase[key]) {
                 val = copperDatabase[key];
@@ -264,41 +262,43 @@ function setupPWA() {
     const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
 
-    // Logic for iOS (No automated prompt exists, show instructions)
+    // 1. iOS Check
     if (isIos && !isStandalone) {
         if (iosInstr) iosInstr.classList.remove('hidden');
     }
 
-    // Capture the automated prompt for Android/Chrome
+    // 2. Android/Desktop Listener
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
-        // Only show button if not on iOS and not already installed
-        if (!isIos && !isStandalone && installBtn) {
+        if (!isStandalone && !isIos && installBtn) {
             installBtn.classList.remove('hidden');
         }
     });
 
+    // 3. Forced Visibility Fallback (Show if not standalone and not iOS)
+    setTimeout(() => {
+        if (!isStandalone && !isIos && installBtn && installBtn.classList.contains('hidden')) {
+            console.log("Forcing Install Button visibility via fallback.");
+            installBtn.classList.remove('hidden');
+        }
+    }, 2000);
+
     if (installBtn) {
         installBtn.addEventListener('click', async () => {
             if (deferredPrompt) {
-                // Trigger the automatic install prompt
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') {
-                    console.log('User accepted install');
-                    installBtn.classList.add('hidden');
-                }
+                if (outcome === 'accepted') installBtn.classList.add('hidden');
                 deferredPrompt = null;
             } else if (!isIos) {
-                // If button is visible but prompt isn't ready (fallback)
-                alert("Installation is ready in your browser menu. Look for 'Install App' or 'Add to Home Screen'.");
+                // If button clicked but browser hasn't fired prompt event yet
+                alert("Installation is ready. Tap the three dots (⋮) in your browser menu and select 'Install App' or 'Add to Home Screen'.");
             }
         });
     }
 
     window.addEventListener('appinstalled', () => {
-        console.log('PWA installed');
         if (installBtn) installBtn.classList.add('hidden');
         deferredPrompt = null;
     });
