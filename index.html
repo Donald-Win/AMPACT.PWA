@@ -4,22 +4,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ducky's AMPACT Selector</title>
-    <!-- Link to the web app manifest file -->
     <link rel="manifest" href="manifest.json">
-    <!-- Tailwind CSS for modern, responsive styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
+        body { font-family: 'Inter', sans-serif; }
+        
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: white;
+            min-width: 100%;
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 0.5rem;
+            z-index: 1000;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
         }
-        .input-container {
-            position: relative;
+        .dropdown-content div {
+            padding: 12px 16px;
+            cursor: pointer;
         }
-        #install-button {
-            display: none; 
-            margin-top: 1.5rem; 
-        }
+        .dropdown-content div:hover { background-color: #f3f4f6; }
+        .show { display: block; }
+        
+        #install-button { display: none; margin-top: 1.5rem; }
         #ios-install-instructions {
             display: none;
             margin-top: 1.5rem;
@@ -35,53 +45,46 @@
     <div id="main-content" class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
         <h1 class="text-3xl font-bold mb-6 text-gray-800 text-center">AMPACT Selector</h1>
         
-        <!-- Large Side (Tap) Selector -->
-        <div class="mb-6 input-container" id="tap-container">
-            <label for="tap-select" class="block text-sm font-medium text-gray-700 mb-2">Large Side (Tap)</label>
-            <select id="tap-select" class="block w-full p-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900 transition ease-in-out">
-                <option value="">Select Conductor...</option>
-            </select>
+        <!-- Large Side (Tap) Searchable Selector -->
+        <div class="mb-6 relative">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Large Side (Tap)</label>
+            <input type="text" id="tap-search" placeholder="Search or select conductor..." class="block w-full p-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900 outline-none">
+            <div id="tap-dropdown" class="dropdown-content"></div>
         </div>
 
-        <!-- Small Side (Stirrup) Selector -->
-        <div class="mb-8 input-container" id="stirrup-container">
-            <label for="stirrup-select" class="block text-sm font-medium text-gray-700 mb-2">Small Side (Stirrup)</label>
-            <select id="stirrup-select" class="block w-full p-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900 transition ease-in-out">
-                <option value="">Select Conductor...</option>
-            </select>
+        <!-- Small Side (Stirrup) Searchable Selector -->
+        <div class="mb-8 relative">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Small Side (Stirrup)</label>
+            <input type="text" id="stirrup-search" placeholder="Search or select conductor..." class="block w-full p-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900 outline-none">
+            <div id="stirrup-dropdown" class="dropdown-content"></div>
         </div>
 
-        <!-- Result Display Area -->
-        <div id="output-container" class="bg-gray-50 p-6 rounded-xl border border-gray-200 text-center min-h-[120px] flex flex-col items-center justify-center">
+        <!-- Result Display Area (Dynamic Colors) -->
+        <div id="output-box" class="bg-gray-50 p-6 rounded-xl border border-gray-200 text-center min-h-[120px] flex flex-col items-center justify-center transition-all duration-300">
             <p id="output" class="text-xl font-bold text-gray-700 leading-tight">Data is loading...</p>
         </div>
 
-        <!-- Action Buttons -->
         <div class="flex flex-col gap-3 mt-6">
             <button id="reset-button" class="w-full bg-gray-800 hover:bg-black text-white font-bold py-3 px-4 rounded-lg transition duration-200">
                 Clear Selection
             </button>
-            
             <button id="install-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md">
-                Install App for Offline Use
+                Install App
             </button>
         </div>
 
-        <!-- iOS Specific Instructions -->
         <div id="ios-install-instructions">
-            <p class="text-blue-800 text-sm font-medium">
-                To install on iOS: Tap the <span class="font-bold">Share</span> icon (square with arrow) and select <span class="font-bold">"Add to Home Screen"</span>.
+            <p class="text-blue-800 text-sm font-medium text-center">
+                To install: Tap <span class="font-bold">Share</span> and <span class="font-bold">"Add to Home Screen"</span>.
             </p>
         </div>
     </div>
 
-    <!-- Disabled Overlay (Kill Switch) -->
-    <div id="kill-switch-overlay" class="hidden fixed inset-0 bg-white/95 z-50 flex flex-col items-center justify-center text-center p-6">
+    <div id="kill-switch-overlay" class="hidden fixed inset-0 bg-white/95 z-[2000] flex flex-col items-center justify-center text-center p-6">
         <h2 class="text-2xl font-bold text-red-600 mb-4">Service Unavailable</h2>
-        <p class="text-gray-700 max-w-sm">This application has been temporarily disabled. Please contact your Ducky for the latest version.</p>
+        <p class="text-gray-700">This application has been disabled by the administrator.</p>
     </div>
 
-    <!-- Modular Script -->
     <script src="app.js" defer></script>
 </body>
 </html>
