@@ -20,6 +20,7 @@
             box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
         }
 
+        /* Initially hide the install button until the PWA prompt is ready */
         #install-button { display: none; }
         
         .glass-card {
@@ -28,7 +29,6 @@
             transition: all 0.4s ease;
         }
 
-        /* Floating background footer styling */
         .bg-footer {
             position: fixed;
             bottom: 1.5rem;
@@ -53,7 +53,6 @@
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4" id="body-bg">
 
-    <!-- Main App Window -->
     <div id="main-content" class="glass-card p-8 rounded-3xl shadow-2xl w-full max-w-md border border-white/20 relative z-20">
         <h1 class="text-3xl font-black mb-6 text-gray-800 text-center tracking-tight">AMPACT Selector</h1>
         
@@ -81,19 +80,19 @@
             <button id="reset-button" class="w-full bg-gray-900 hover:bg-black text-white font-bold py-4 px-4 rounded-2xl transition-all active:scale-95 shadow-lg">
                 Clear Selection
             </button>
-            <button id="install-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-4 rounded-2xl transition-all shadow-lg active:scale-95">
+            <!-- Changed to Green (emerald-600) per your request -->
+            <button id="install-button" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 px-4 rounded-2xl transition-all shadow-lg active:scale-95">
                 Install App
             </button>
         </div>
 
-        <div id="ios-install-instructions" class="hidden mt-4 bg-white/80 p-4 rounded-xl border border-blue-200">
-            <p class="text-blue-900 text-sm font-semibold text-center">
+        <div id="ios-install-instructions" class="hidden mt-4 bg-white/80 p-4 rounded-xl border border-emerald-200">
+            <p class="text-emerald-900 text-sm font-semibold text-center">
                 Tap <span class="underline">Share</span> then <span class="font-bold">"Add to Home Screen"</span>.
             </p>
         </div>
     </div>
 
-    <!-- Background Footer (Version & Link) -->
     <div class="bg-footer">
         <a href="https://github.com/Donald-Win/AMPACT.PWA" id="github-link" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 text-sm font-bold opacity-60 hover:opacity-100 transition-opacity">
             <svg height="20" width="20" viewBox="0 0 16 16" fill="currentColor">
@@ -102,11 +101,6 @@
             GitHub: AMPACT.PWA
         </a>
         <p id="version-display" class="text-[10px] font-black tracking-[0.2em] opacity-40 uppercase">v2.0.10</p>
-    </div>
-
-    <div id="kill-switch-overlay" class="hidden fixed inset-0 bg-white/95 z-[2000] flex flex-col items-center justify-center text-center p-6">
-        <h2 class="text-2xl font-bold text-red-600 mb-4">Service Offline</h2>
-        <p class="text-gray-700">Database unavailable.</p>
     </div>
 
     <script src="app.js" defer></script>
