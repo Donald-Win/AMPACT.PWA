@@ -1,24 +1,30 @@
 /**
- * Ducky's AMPACT Selector - v4.8.0
- * Single-Source Engine: Main AMPACT x-ref chart ONLY
+ * Ducky's AMPACT Selector - v5.0.0
+ * Deep-Style Inspection Engine (Main Chart Formatting)
  */
 let spreadsheetData = [];
 let tapSelection = '';
 let stirrupSelection = '';
 let conductorHeaderName = "";
 
+// Map Excel's internal style IDs to our UI themes
 const colorMap = {
-    // Hex mappings (including Excel's FF prefix for Alpha)
-    'FFFF00': 'yellow', 'FFFFFF00': 'yellow',
-    'FF0000FF': 'blue', '0000FF': 'blue', 'FF00B0F0': 'blue', '00B0F0': 'blue',
-    'FFED7D31': 'copper', 'ED7D31': 'copper', 'B87333': 'copper', 'FFB87333': 'copper',
-    'FFFF0000': 'red', 'FF0000': 'red', 'C00000': 'red', 'FFC00000': 'red',
-    'FFFFFFFF': 'white', 'FFFFFF': 'white',
-    // Excel Standard Theme Indices (Common defaults)
-    'theme-4': 'blue',   // Accent 1
-    'theme-5': 'red',    // Accent 2
-    'theme-6': 'yellow', // Accent 3
-    'theme-8': 'copper'  // Accent 5
+    // Standard Hex (Common in AMPACT spreadsheets)
+    'FFFF00': 'yellow', 'FFFFFF00': 'yellow', // Yellow
+    'FF0000FF': 'blue', '0000FF': 'blue',     // Blue
+    'FF00B0F0': 'blue', '00B0F0': 'blue',     // Light Blue
+    'FFED7D31': 'copper', 'ED7D31': 'copper', // Orange/Copper
+    'FFB87333': 'copper', 'B87333': 'copper', // Copper
+    'FFFF0000': 'red', 'FF0000': 'red',       // Red
+    'FFC00000': 'red', 'C00000': 'red',       // Dark Red
+    'FFFFFFFF': 'white', 'FFFFFF': 'white',   // White
+    
+    // Excel Theme Indices (Determined by standard Office palette)
+    'theme-4': 'blue',   // Accent 1 (Blue)
+    'theme-5': 'red',    // Accent 2 (Red)
+    'theme-6': 'yellow', // Accent 3 (Yellow)
+    'theme-8': 'copper', // Accent 5 (Copper/Tan)
+    'theme-9': 'blue'    // Accent 6 (Blue/Green)
 };
 
 const colorThemes = {
@@ -35,8 +41,8 @@ document.addEventListener('DOMContentLoaded', initApp);
 function clean(str) {
     if (str === undefined || str === null) return "";
     return str.toString()
-        .replace(/\r?\n|\r/g, ' ') // Remove newlines
-        .replace(/\s+/g, ' ')      // Remove double spaces
+        .replace(/\r?\n|\r/g, ' ')
+        .replace(/\s+/g, ' ')
         .trim();
 }
 
@@ -51,20 +57,20 @@ async function loadExcelData() {
         if (!response.ok) throw new Error("data.xlsx not found");
         const arrayBuffer = await response.arrayBuffer();
         
-        // IMPORTANT: cellStyles must be true to read background colors
+        // CRITICAL: cellStyles MUST be true to access the formatting objects
         const workbook = XLSX.read(new Uint8Array(arrayBuffer), { 
             type: 'array', 
             cellStyles: true 
         });
         
-        // Target ONLY the Main chart
-        const mainSheetName = workbook.SheetNames.find(n => 
+        const sheetName = workbook.SheetNames.find(n => 
             n.toLowerCase().includes('main') || n.toLowerCase().includes('x-ref')
         ) || workbook.SheetNames[0];
         
-        const sheet = workbook.Sheets[mainSheetName];
+        const sheet = workbook.Sheets[sheetName];
         const range = XLSX.utils.decode_range(sheet['!ref']);
         
+        // 1. Map Headers
         const headers = [];
         for (let C = range.s.c; C <= range.e.c; ++C) {
             const cell = sheet[XLSX.utils.encode_cell({ r: range.s.r, c: C })];
@@ -72,6 +78,7 @@ async function loadExcelData() {
         }
         conductorHeaderName = headers[0];
 
+        // 2. Map Rows with Formatting
         const rows = [];
         for (let R = range.s.r + 1; R <= range.e.r; ++R) {
             const rowData = { _styles: {} };
@@ -86,13 +93,17 @@ async function loadExcelData() {
                 rowData[head] = val;
                 if (val) hasContent = true;
 
-                // Color extraction from cell style
-                if (cell && cell.s && cell.s.fill && cell.s.fill.fgColor) {
-                    const fg = cell.s.fill.fgColor;
-                    if (fg.rgb) {
-                        rowData._styles[head] = fg.rgb.toUpperCase();
-                    } else if (fg.theme !== undefined) {
-                        rowData._styles[head] = `theme-${fg.theme}`;
+                // Inspect background color
+                if (cell && cell.s && cell.s.fill) {
+                    const fill = cell.s.fill;
+                    const fgColor = fill.fgColor;
+                    
+                    if (fgColor) {
+                        if (fgColor.rgb) {
+                            rowData._styles[head] = fgColor.rgb.toUpperCase();
+                        } else if (fgColor.theme !== undefined) {
+                            rowData._styles[head] = `theme-${fgColor.theme}`;
+                        }
                     }
                 }
             }
@@ -104,7 +115,7 @@ async function loadExcelData() {
         updateStirrupOptions('');
         displayResult('Ready', 'default');
     } catch (e) {
-        console.error("Excel Error:", e);
+        console.error("Excel Styling Error:", e);
         displayResult('Load Error', 'default');
     }
 }
@@ -119,24 +130,30 @@ function calculate() {
     if (!row) return;
 
     const result = row[stirrupSelection];
-    const styleId = row._styles[stirrupSelection];
+    const styleKey = row._styles[stirrupSelection];
 
-    if (result && !result.toLowerCase().includes("refer copper")) {
+    if (result) {
         let theme = 'default';
 
-        // 1. Match specific Hex or Theme Index
-        if (styleId && colorMap[styleId]) {
-            theme = colorMap[styleId];
-        } 
-        // 2. Handle 8-digit Hex (removing Alpha)
-        else if (styleId && styleId.length === 8) {
-            const hex6 = styleId.substring(2);
-            if (colorMap[hex6]) theme = colorMap[hex6];
+        // Direct matching of color indices or hex codes
+        if (styleKey) {
+            // Check direct mapping
+            if (colorMap[styleKey]) {
+                theme = colorMap[styleKey];
+            } 
+            // Check 8-digit hex (ARGB) by stripping first 2 chars
+            else if (styleKey.length === 8) {
+                const hex6 = styleKey.substring(2);
+                if (colorMap[hex6]) theme = colorMap[hex6];
+            }
+        }
+
+        // Special case for Copper which sometimes results in text-only matches
+        if (result.toLowerCase().includes("copper") && theme === 'default') {
+            theme = 'copper';
         }
 
         displayResult(result, theme);
-    } else if (result && result.toLowerCase().includes("refer copper")) {
-        displayResult("Check Copper Chart", 'copper');
     } else {
         displayResult('No Match', 'default');
     }
@@ -182,7 +199,12 @@ function displayResult(text, key) {
     
     body.style.backgroundColor = theme.body;
     box.className = `p-8 rounded-2xl border-4 text-center min-h-[140px] flex flex-col items-center justify-center shadow-lg transition-all duration-500 ${theme.bg} ${theme.border}`;
-    output.className = `font-black uppercase text-center ${theme.text} ${text.length > 15 ? 'text-lg' : 'text-3xl'}`;
+    
+    if (text.length > 20) output.className = `font-black uppercase text-center ${theme.text} text-xs`;
+    else if (text.length > 15) output.className = `font-black uppercase text-center ${theme.text} text-base`;
+    else if (text.length > 10) output.className = `font-black uppercase text-center ${theme.text} text-xl`;
+    else output.className = `font-black uppercase text-center ${theme.text} text-3xl`;
+    
     output.textContent = text;
 }
 
