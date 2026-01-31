@@ -10,25 +10,6 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
         
-        .dropdown-content {
-            display: none;
-            position: absolute;
-            background-color: white;
-            min-width: 100%;
-            max-height: 250px;
-            overflow-y: auto;
-            border: 1px solid #ddd;
-            border-radius: 0.5rem;
-            z-index: 1000;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-        }
-        .dropdown-content div {
-            padding: 12px 16px;
-            cursor: pointer;
-        }
-        .dropdown-content div:hover { background-color: #f3f4f6; }
-        .show { display: block; }
-        
         #install-button { display: none; margin-top: 1.5rem; }
         #ios-install-instructions {
             display: none;
@@ -38,6 +19,8 @@
             border-radius: 0.75rem;
             border: 1px solid #bae6fd;
         }
+        /* Smooth transition for result box color changes */
+        #output-box { transition: all 0.3s ease; }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
@@ -45,22 +28,26 @@
     <div id="main-content" class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
         <h1 class="text-3xl font-bold mb-6 text-gray-800 text-center">AMPACT Selector</h1>
         
-        <!-- Large Side (Tap) Searchable Selector -->
-        <div class="mb-6 relative">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Large Side (Tap)</label>
-            <input type="text" id="tap-search" placeholder="Search or select conductor..." class="block w-full p-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900 outline-none">
-            <div id="tap-dropdown" class="dropdown-content"></div>
+        <!-- Large Side (Tap) Section -->
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Large Side (Tap)</label>
+            <input type="text" id="tap-search" placeholder="Search conductors..." class="block w-full p-2 mb-2 bg-gray-50 border border-gray-200 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 outline-none">
+            <select id="tap-select" class="block w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900 transition ease-in-out">
+                <option value="">Select Conductor...</option>
+            </select>
         </div>
 
-        <!-- Small Side (Stirrup) Searchable Selector -->
-        <div class="mb-8 relative">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Small Side (Stirrup)</label>
-            <input type="text" id="stirrup-search" placeholder="Search or select conductor..." class="block w-full p-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900 outline-none">
-            <div id="stirrup-dropdown" class="dropdown-content"></div>
+        <!-- Small Side (Stirrup) Section -->
+        <div class="mb-8">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Small Side (Stirrup)</label>
+            <input type="text" id="stirrup-search" placeholder="Search conductors..." class="block w-full p-2 mb-2 bg-gray-50 border border-gray-200 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 outline-none">
+            <select id="stirrup-select" class="block w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-900 transition ease-in-out">
+                <option value="">Select Conductor...</option>
+            </select>
         </div>
 
-        <!-- Result Display Area (Dynamic Colors) -->
-        <div id="output-box" class="bg-gray-50 p-6 rounded-xl border border-gray-200 text-center min-h-[120px] flex flex-col items-center justify-center transition-all duration-300">
+        <!-- Result Display Area -->
+        <div id="output-box" class="bg-gray-50 p-6 rounded-xl border border-gray-200 text-center min-h-[120px] flex flex-col items-center justify-center">
             <p id="output" class="text-xl font-bold text-gray-700 leading-tight">Data is loading...</p>
         </div>
 
