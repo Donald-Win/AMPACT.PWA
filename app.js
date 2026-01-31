@@ -1,5 +1,5 @@
 /**
- * AMPACT Selector - v6.3.1
+ * AMPACT Selector - v6.3.2
  * Created and Maintained by Donald Win
  */
 let themedDatabase = {}; 
@@ -8,7 +8,7 @@ let conductorOptions = [];
 let selection1 = '';
 let selection2 = '';
 let deferredPrompt = null;
-const APP_VERSION = "v6.3.1";
+const APP_VERSION = "v6.3.2";
 
 const colorThemes = {
     'blue': { body: '#2563eb', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
@@ -40,7 +40,7 @@ function cleanCell(val) {
 async function initApp() {
     setupEventListeners();
     const vTag = document.getElementById('version-tag');
-    if (vTag) vTag.textContent = `${APP_VERSION}`;
+    if (vTag) vTag.textContent = APP_VERSION;
     await loadExcelData();
     setupPWA();
 }
@@ -48,8 +48,11 @@ async function initApp() {
 async function loadExcelData() {
     try {
         const response = await fetch(`data.xlsx?t=${Date.now()}`);
+        if (!response.ok) throw new Error("File not found");
+        
         const arrayBuffer = await response.arrayBuffer();
-        const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
+        const data = new Uint8Array(arrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
         
         let rawOptionsMap = new Map();
         themedDatabase = {};
@@ -85,7 +88,7 @@ async function loadExcelData() {
                     if (!rawOptionsMap.has(nStirrup)) rawOptionsMap.set(nStirrup, rawStirrup);
 
                     const val = cleanCell(rowData[c]);
-                    if (val) {
+                    if (val && val !== "") {
                         const key = `${nTap}|${nStirrup}`;
                         if (isCopperSheet) copperDatabase[key] = val;
                         else themedDatabase[key] = { value: val, theme: theme };
@@ -99,6 +102,7 @@ async function loadExcelData() {
         updateList('stirrup', '');
         displayResult('Ready', 'default', false);
     } catch (e) {
+        console.error("Load Error:", e);
         displayResult('EXCEL ERROR', 'default', false);
     }
 }
@@ -120,7 +124,10 @@ function calculate() {
             break;
         }
     }
-    if (val.toLowerCase().includes("copper") || val.toLowerCase().includes("refer") || !val) {
+    
+    const isRedirect = val && (val.toLowerCase().includes("copper") || val.toLowerCase().includes("refer"));
+    
+    if (isRedirect || !val) {
         for (let key of pairs) {
             if (copperDatabase[key]) {
                 val = copperDatabase[key];
@@ -129,6 +136,7 @@ function calculate() {
             }
         }
     }
+
     if (val) displayResult(val, theme, true);
     else displayResult('No Match', 'default', false);
 }
@@ -153,14 +161,14 @@ function updateList(type, filter) {
     } else {
         matches.forEach(name => {
             const div = document.createElement('div');
-            div.className = "p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 text-gray-800 font-bold text-sm";
+            div.className = "p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 text-gray-800 font-bold text-sm transition-colors";
             div.textContent = name;
-            div.onclick = () => {
+            div.onclick = (e) => {
+                e.stopPropagation();
                 inputEl.value = name;
-                if (type === 'tap') selection1 = name;
-                else selection2 = name;
+                if (type === 'tap') selection1 = name; else selection2 = name;
                 listEl.classList.add('hidden'); 
-                updateList(type, name); // Refresh clear button
+                if (clearBtn) clearBtn.classList.remove('hidden');
                 calculate();
             };
             listEl.appendChild(div);
@@ -173,17 +181,24 @@ function displayResult(text, key, shouldFlash) {
     const box = document.getElementById('output-box');
     const body = document.getElementById('body-bg');
     const theme = colorThemes[key] || colorThemes.default;
+    
     body.style.backgroundColor = theme.body;
     box.classList.remove('flash-success');
+    
     if (shouldFlash) {
         void box.offsetWidth; 
         box.classList.add('flash-success');
     }
+    
     box.className = `p-4 rounded-3xl border-4 text-center min-h-[180px] w-full flex flex-col items-center justify-center shadow-lg transition-all duration-300 ${theme.bg} ${theme.border}`;
+    
     let displayStr = text;
     if (key === 'copper') displayStr = text.replace(/copper|cu|see|sheet|chart|refer/gi, '').trim();
+    if (!displayStr) displayStr = "CHECK CHART";
+
     output.innerHTML = '';
     const parts = displayStr.split(/\s+/).filter(p => p.trim() !== "");
+    
     if (parts.length > 1 && !displayStr.toLowerCase().includes("ready")) {
         const cont = document.createElement('div');
         cont.className = "flex flex-col gap-1 w-full items-center";
@@ -197,7 +212,7 @@ function displayResult(text, key, shouldFlash) {
     } else {
         const d = document.createElement('div');
         d.className = `font-black uppercase ${theme.text} ${displayStr.length > 15 ? 'text-xl' : 'text-4xl'}`;
-        d.textContent = displayStr || "CHECK CHART";
+        d.textContent = displayStr;
         output.appendChild(d);
     }
 }
@@ -212,15 +227,18 @@ function setupEventListeners() {
             updateList(type, e.target.value);
             list.classList.remove('hidden');
         });
+
         input.addEventListener('focus', () => {
             updateList(type, input.value);
             list.classList.remove('hidden');
         });
-        clear.addEventListener('click', () => {
+
+        clear.addEventListener('click', (e) => {
+            e.stopPropagation();
             input.value = '';
             if (type === 'tap') selection1 = ''; else selection2 = '';
             updateList(type, '');
-            input.focus();
+            clear.classList.add('hidden');
             calculate();
         });
     });
@@ -232,8 +250,10 @@ function setupEventListeners() {
 
     document.getElementById('reset-button').addEventListener('click', () => {
         ['tap', 'stirrup'].forEach(type => {
-            document.getElementById(`${type}-search`).value = '';
+            const input = document.getElementById(`${type}-search`);
+            input.value = '';
             document.getElementById(`${type}-clear`).classList.add('hidden');
+            document.getElementById(`${type}-list`).classList.add('hidden');
         });
         selection1 = ''; selection2 = '';
         displayResult('Ready', 'default', false);
@@ -244,14 +264,17 @@ function setupPWA() {
     const installBtn = document.getElementById('install-btn');
     const iosInstr = document.getElementById('ios-install-instructions');
     const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    
     if (isIos && !window.matchMedia('(display-mode: standalone)').matches) {
         if (iosInstr) iosInstr.classList.remove('hidden');
     }
+
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
         if (installBtn) installBtn.classList.remove('hidden');
     });
+
     if (installBtn) {
         installBtn.addEventListener('click', async () => {
             if (deferredPrompt) {
@@ -259,96 +282,7 @@ function setupPWA() {
                 const { outcome } = await deferredPrompt.userChoice;
                 if (outcome === 'accepted') installBtn.classList.add('hidden');
                 deferredPrompt = null;
-            } else {
-                alert("Use your browser menu to 'Add to Home Screen'.");
             }
         });
     }
 }
-```eof
-
-```html:AMPACT Selector UI:index.html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#2563eb">
-    <title>AMPACT Selector</title>
-    <link rel="manifest" href="manifest.json">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
-        .flash-success { animation: flash-green 0.6s ease-out; }
-        @keyframes flash-green {
-            0% { background-color: #22c55e; border-color: #166534; transform: scale(1); }
-            50% { transform: scale(1.08); }
-            100% { transform: scale(1); }
-        }
-        .custom-list::-webkit-scrollbar { width: 6px; }
-        .custom-list::-webkit-scrollbar-thumb { background: #888; border-radius: 3px; }
-    </style>
-</head>
-<body id="body-bg" class="min-h-screen flex flex-col items-center p-4 transition-colors duration-500">
-
-    <div class="w-full max-w-md mt-4">
-        <div class="bg-white rounded-[2.5rem] shadow-2xl p-8 border border-gray-100">
-            <header class="text-center mb-8">
-                <h1 class="text-4xl font-black text-gray-900 tracking-tighter uppercase mb-1 whitespace-nowrap">AMPACT Selector</h1>
-                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Created and Maintained by Donald Win</p>
-            </header>
-
-            <div class="space-y-6">
-                <div id="tap-container" class="relative">
-                    <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Conductor 1</label>
-                    <div class="relative">
-                        <input type="text" id="tap-search" placeholder="Search..." autocomplete="off"
-                            class="w-full pl-4 pr-10 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl outline-none text-sm font-medium focus:border-blue-500 focus:bg-white transition-all cursor-pointer">
-                        <button id="tap-clear" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
-                    </div>
-                    <div id="tap-list" class="hidden absolute top-full left-0 right-0 mt-1 bg-white border-2 border-gray-100 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto custom-list"></div>
-                </div>
-
-                <div id="stirrup-container" class="relative">
-                    <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Conductor 2</label>
-                    <div class="relative">
-                        <input type="text" id="stirrup-search" placeholder="Search..." autocomplete="off"
-                            class="w-full pl-4 pr-10 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl outline-none text-sm font-medium focus:border-blue-500 focus:bg-white transition-all cursor-pointer">
-                        <button id="stirrup-clear" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
-                    </div>
-                    <div id="stirrup-list" class="hidden absolute top-full left-0 right-0 mt-1 bg-white border-2 border-gray-100 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto custom-list"></div>
-                </div>
-
-                <div id="output-box" class="bg-gray-50 border-gray-200 border-4">
-                    <div id="output">
-                        <div class="text-gray-300 font-black text-4xl uppercase tracking-tighter">READY</div>
-                    </div>
-                </div>
-
-                <button id="reset-button" class="w-full py-2 text-gray-400 font-black uppercase tracking-widest text-[10px] hover:text-gray-600">Clear All</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="w-full max-w-md mt-6 space-y-3">
-        <button id="install-btn" class="hidden w-full bg-emerald-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-transform">
-            Install App
-        </button>
-        
-        <div id="ios-install-instructions" class="hidden bg-white/90 backdrop-blur rounded-2xl p-4 text-center border border-gray-200 shadow-lg">
-             <p class="text-gray-600 text-xs font-bold uppercase tracking-wide">Install on iOS</p>
-             <p class="text-gray-500 text-sm mt-1">Tap <span class="font-bold text-blue-500">Share</span> then <span class="font-bold text-gray-700">Add to Home Screen</span></p>
-        </div>
-
-        <footer class="bg-black/80 backdrop-blur-md rounded-2xl p-4 text-center border border-white/10 shadow-lg">
-            <a href="https://github.com/donald-win/AMPACT.PWA" target="_blank" class="text-white hover:text-blue-400 text-[10px] font-bold uppercase tracking-widest transition-colors block mb-1">GitHub: AMPACT.PWA</a>
-            <div id="version-tag" class="text-white/40 text-[10px] font-black uppercase tracking-widest">v6.3.1</div>
-        </footer>
-    </div>
-
-    <script src="app.js"></script>
-</body>
-</html>
-```eof
