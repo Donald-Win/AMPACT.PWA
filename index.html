@@ -8,7 +8,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>AMPACT Selector</title>
     
-    <!-- Critical: Link to manifest -->
     <link rel="manifest" href="manifest.json">
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -22,9 +21,6 @@
             50% { transform: scale(1.08); }
             100% { transform: scale(1); }
         }
-        .custom-list::-webkit-scrollbar { width: 6px; }
-        .custom-list::-webkit-scrollbar-track { background: #f1f1f1; }
-        .custom-list::-webkit-scrollbar-thumb { background: #888; border-radius: 3px; }
     </style>
 </head>
 <body id="body-bg" class="min-h-screen flex flex-col items-center p-4 transition-colors duration-500">
@@ -32,90 +28,44 @@
     <div class="w-full max-w-md mt-4">
         <div class="bg-white rounded-[2.5rem] shadow-2xl p-8 border border-gray-100">
             <header class="text-center mb-8">
-                <h1 class="text-4xl font-black text-gray-900 tracking-tighter uppercase mb-1 whitespace-nowrap">AMPACT Selector</h1>
-                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Created and Maintained by Donald Win</p>
+                <h1 class="text-4xl font-black text-gray-900 tracking-tighter uppercase mb-1">AMPACT Selector</h1>
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Created by Donald Win</p>
             </header>
 
             <div class="space-y-6">
-                <!-- Conductor 1 -->
+                <!-- Selectors remain the same as previous functional versions -->
                 <div id="tap-container" class="relative">
                     <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Conductor 1</label>
-                    <div class="relative">
-                        <input type="text" id="tap-search" placeholder="Search..." autocomplete="off"
-                            class="w-full pl-4 pr-10 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl outline-none text-sm font-medium focus:border-blue-500 focus:bg-white transition-all cursor-pointer">
-                        <button id="tap-clear" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-bold text-2xl leading-none">&times;</button>
-                    </div>
-                    <div id="tap-list" class="hidden absolute top-full left-0 right-0 mt-1 bg-white border-2 border-gray-100 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto custom-list"></div>
+                    <input type="text" id="tap-search" placeholder="Search..." autocomplete="off" class="w-full pl-4 pr-10 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl outline-none text-sm font-medium focus:border-blue-500 transition-all">
+                    <div id="tap-list" class="hidden absolute top-full left-0 right-0 mt-1 bg-white border rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto"></div>
                 </div>
 
-                <!-- Conductor 2 -->
                 <div id="stirrup-container" class="relative">
                     <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Conductor 2</label>
-                    <div class="relative">
-                        <input type="text" id="stirrup-search" placeholder="Search..." autocomplete="off"
-                            class="w-full pl-4 pr-10 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl outline-none text-sm font-medium focus:border-blue-500 focus:bg-white transition-all cursor-pointer">
-                        <button id="stirrup-clear" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-bold text-2xl leading-none">&times;</button>
-                    </div>
-                    <div id="stirrup-list" class="hidden absolute top-full left-0 right-0 mt-1 bg-white border-2 border-gray-100 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto custom-list"></div>
+                    <input type="text" id="stirrup-search" placeholder="Search..." autocomplete="off" class="w-full pl-4 pr-10 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl outline-none text-sm font-medium focus:border-blue-500 transition-all">
+                    <div id="stirrup-list" class="hidden absolute top-full left-0 right-0 mt-1 bg-white border rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto"></div>
                 </div>
 
-                <div id="output-box" class="bg-gray-50 border-gray-200 border-4">
-                    <div id="output">
-                        <div class="text-gray-300 font-black text-4xl uppercase tracking-tighter">READY</div>
-                    </div>
+                <div id="output-box" class="p-4 rounded-3xl border-4 text-center min-h-[150px] flex items-center justify-center transition-all bg-gray-50 border-gray-100">
+                    <div id="output" class="font-black text-3xl text-gray-300 uppercase">Ready</div>
                 </div>
 
-                <button id="reset-button" class="w-full py-2 text-gray-400 font-black uppercase tracking-widest text-[10px] hover:text-gray-600">Clear All</button>
+                <button id="reset-button" class="w-full py-2 text-gray-400 font-black uppercase text-[10px]">Clear All</button>
             </div>
         </div>
     </div>
 
     <div class="w-full max-w-md mt-6 space-y-3">
-        <!-- Install Button -->
-        <button id="install-btn" class="hidden w-full bg-emerald-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-transform">
+        <button id="install-btn" class="hidden w-full bg-emerald-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl">
             Install App
         </button>
-        
-        <!-- iOS Instructions -->
-        <div id="ios-install-instructions" class="hidden bg-white rounded-2xl p-5 text-center border-2 border-emerald-500 shadow-xl">
-             <div class="flex flex-col items-center">
-                <p class="text-emerald-700 text-xs font-black uppercase tracking-widest mb-3">Install for iPhone</p>
-                <div class="flex items-center justify-center gap-4 text-gray-600 font-medium">
-                    <div class="flex flex-col items-center">
-                        <div class="bg-gray-100 p-2 rounded-lg mb-1">
-                            <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
-                            </svg>
-                        </div>
-                        <span class="text-[10px] uppercase">1. Share</span>
-                    </div>
-                    <div class="text-2xl text-gray-300">→</div>
-                    <div class="flex flex-col items-center">
-                        <div class="bg-gray-100 p-2 rounded-lg mb-1">
-                            <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                            </svg>
-                        </div>
-                        <span class="text-[10px] uppercase">2. Add to Home</span>
-                    </div>
-                </div>
-             </div>
-        </div>
-
-        <footer class="bg-black/80 backdrop-blur-md rounded-2xl p-4 text-center border border-white/10 shadow-lg">
-            <a href="https://github.com/donald-win/AMPACT.PWA" target="_blank" class="text-white hover:text-blue-400 text-[10px] font-bold uppercase tracking-widest transition-colors block mb-1">GitHub: AMPACT.PWA</a>
-            <div id="version-tag" class="text-white/40 text-[10px] font-black uppercase tracking-widest">v6.3.5</div>
-        </footer>
     </div>
 
     <script>
-        // Register Service Worker (Required for Install Prompt)
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('SW Registered', reg))
-                    .catch(err => console.log('SW Failed', err));
-            });
+            navigator.serviceWorker.register('./sw.js')
+                .then(() => console.log("SW Registered"))
+                .catch(err => console.log("SW Failed", err));
         }
     </script>
     <script src="app.js"></script>
