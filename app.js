@@ -1,6 +1,6 @@
 /**
- * Ducky's AMPACT Selector - Core Logic v2.0.15
- * Robust Matching Engine for special characters and part numbers
+ * Ducky's AMPACT Selector - Core Logic v2.0.16
+ * FIXED: Hidden newline characters (\n) in data.json
  */
 let spreadsheetData = [];
 let tapSelection = '';
@@ -64,14 +64,35 @@ function setupEventListeners() {
     });
 }
 
+/**
+ * CLEAN DATA ON LOAD: 
+ * Your JSON has "Butterfly\n(23.20mm)". 
+ * We replace all \n with a single space to make it selectable.
+ */
 async function loadData() {
     try {
         const response = await fetch(`data.json?t=${Date.now()}`);
-        spreadsheetData = await response.json();
+        const rawJson = await response.json();
+        
+        spreadsheetData = rawJson.map(row => {
+            const cleanRow = {};
+            for (let key in row) {
+                // Replace newlines with spaces and trim
+                const cleanKey = key.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+                let cleanVal = row[key];
+                if (typeof cleanVal === 'string') {
+                    cleanVal = cleanVal.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+                }
+                cleanRow[cleanKey] = cleanVal;
+            }
+            return cleanRow;
+        });
+
         updateDropdown('tap', '');
         updateDropdown('stirrup', '');
         displayResult('Ready', 'default');
     } catch (e) {
+        console.error("Load Error:", e);
         displayResult('Error Data', 'default');
     }
 }
@@ -80,6 +101,7 @@ function updateDropdown(type, query) {
     const select = document.getElementById(`${type}-select`);
     if (!spreadsheetData.length) return;
     
+    // First column is the "Tap" list
     const conductorKey = Object.keys(spreadsheetData[0])[0];
     const prev = select.value;
     select.innerHTML = '';
@@ -111,29 +133,14 @@ function calculate() {
     }
 
     const conductorKey = Object.keys(spreadsheetData[0])[0];
-    
-    // 1. Find the correct row (Tap)
-    const row = spreadsheetData.find(r => 
-        String(r[conductorKey]).trim() === tapSelection.trim()
-    );
+    const row = spreadsheetData.find(r => String(r[conductorKey]).trim() === tapSelection.trim());
 
     if (!row) {
         displayResult('No Match', 'default');
         return;
     }
 
-    // 2. Find the correct column (Stirrup)
-    // We iterate through all keys to find the one that matches our stirrup selection
-    // this avoids issues with parentheses or bracket notation failures.
-    let rawVal = null;
-    const targetKey = stirrupSelection.trim().toLowerCase();
-    
-    for (let key in row) {
-        if (key.trim().toLowerCase() === targetKey) {
-            rawVal = row[key];
-            break;
-        }
-    }
+    const rawVal = row[stirrupSelection];
     
     if (rawVal && String(rawVal).trim() !== "") {
         const valStr = String(rawVal).trim();
@@ -146,9 +153,7 @@ function calculate() {
         else if (lowerVal.includes('red')) themeKey = 'red';
         else if (lowerVal.includes('copper')) themeKey = 'copper';
         
-        // Remove color names but keep part numbers like 1-602031-2
         const cleanVal = valStr.replace(/\b(blue|yellow|white|red|copper)\b/gi, '').trim();
-        
         displayResult(cleanVal, themeKey);
     } else {
         displayResult('No Match', 'default');
@@ -166,8 +171,9 @@ function displayResult(text, key) {
     body.style.backgroundColor = theme.body;
     box.className = `p-8 rounded-2xl border-4 text-center min-h-[140px] flex flex-col items-center justify-center shadow-lg transition-all duration-500 ${theme.bg} ${theme.border}`;
     
-    // Scale text for long part numbers
-    if (text.length > 10) {
+    if (text.length > 12) {
+        output.className = `text-xl font-black uppercase tracking-tight ${theme.text}`;
+    } else if (text.length > 8) {
         output.className = `text-2xl font-black uppercase tracking-tight ${theme.text}`;
     } else {
         output.className = `text-3xl font-black uppercase tracking-widest ${theme.text}`;
