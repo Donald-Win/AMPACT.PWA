@@ -4,8 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>AMPACT Selector</title>
+    
+    <!-- Critical: Link to manifest -->
     <link rel="manifest" href="manifest.json">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
@@ -104,8 +109,13 @@
     </div>
 
     <script>
+        // Register Service Worker (Required for Install Prompt)
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js').catch((err) => console.log("SW Error:", err));
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('SW Registered', reg))
+                    .catch(err => console.log('SW Failed', err));
+            });
         }
     </script>
     <script src="app.js"></script>
