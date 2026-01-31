@@ -1,11 +1,25 @@
 /**
- * Ducky's AMPACT Selector - Core Logic v2.0.16
- * FIXED: Hidden newline characters (\n) in data.json
+ * Ducky's AMPACT Selector - v4.1.0
+ * Feature: Automatic Theme Detection from Excel Cell Colors
  */
 let spreadsheetData = [];
 let tapSelection = '';
 let stirrupSelection = '';
 let deferredPrompt = null;
+
+// Mapping Excel Hex Colors to App Themes
+const colorMap = {
+    'FFFF00': 'yellow',  // Yellow
+    'FFFFFF00': 'yellow',
+    'FFFF0000': 'red',   // Red
+    'FF0000FF': 'blue',  // Blue
+    'FF00B0F0': 'blue',  // Cyan/Light Blue
+    'FF0070C0': 'blue',  // Darker Blue
+    'FFED7D31': 'copper',// Orange/Copper
+    'FFC00000': 'red',   // Dark Red
+    'FFFFFFFF': 'white', // White
+    'FF000000': 'default'
+};
 
 const colorThemes = {
     'blue': { body: '#2563eb', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
@@ -19,89 +33,137 @@ const colorThemes = {
 document.addEventListener('DOMContentLoaded', initApp);
 
 async function initApp() {
-    registerServiceWorker();
     setupEventListeners();
-    await loadData();
+    await loadExcelData();
 }
 
-function registerServiceWorker() {
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('service-worker.js').catch(() => {});
-        });
-    }
-}
-
-window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    const installBtn = document.getElementById('install-button');
-    if (installBtn) installBtn.style.display = 'block';
-});
-
-function setupEventListeners() {
-    const tapSearch = document.getElementById('tap-search');
-    const stirrupSearch = document.getElementById('stirrup-search');
-    const tapSelect = document.getElementById('tap-select');
-    const stirrupSelect = document.getElementById('stirrup-select');
-    const installBtn = document.getElementById('install-button');
-
-    tapSearch.addEventListener('input', (e) => updateDropdown('tap', e.target.value));
-    stirrupSearch.addEventListener('input', (e) => updateDropdown('stirrup', e.target.value));
-    tapSelect.addEventListener('change', (e) => { tapSelection = e.target.value; calculate(); });
-    stirrupSelect.addEventListener('change', (e) => { stirrupSelection = e.target.value; calculate(); });
-    document.getElementById('reset-button').addEventListener('click', resetAll);
-
-    installBtn.addEventListener('click', async () => {
-        if (!deferredPrompt) {
-            alert("To install: Tap the 3-dot menu and select 'Install app' or 'Add to Home Screen'.");
-            return;
-        }
-        deferredPrompt.prompt();
-        await deferredPrompt.userChoice;
-        deferredPrompt = null;
-        installBtn.style.display = 'none';
-    });
-}
-
-/**
- * CLEAN DATA ON LOAD: 
- * Your JSON has "Butterfly\n(23.20mm)". 
- * We replace all \n with a single space to make it selectable.
- */
-async function loadData() {
+async function loadExcelData() {
     try {
-        const response = await fetch(`data.json?t=${Date.now()}`);
-        const rawJson = await response.json();
+        const response = await fetch(`data.xlsx?t=${Date.now()}`);
+        if (!response.ok) throw new Error("data.xlsx not found");
         
-        spreadsheetData = rawJson.map(row => {
-            const cleanRow = {};
-            for (let key in row) {
-                // Replace newlines with spaces and trim
-                const cleanKey = key.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-                let cleanVal = row[key];
-                if (typeof cleanVal === 'string') {
-                    cleanVal = cleanVal.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-                }
-                cleanRow[cleanKey] = cleanVal;
-            }
-            return cleanRow;
-        });
+        const arrayBuffer = await response.arrayBuffer();
+        const data = new Uint8Array(arrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array', cellStyles: true });
+        
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        const rows = [];
+        const headers = [];
 
+        // Identify Headers (Row 0)
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+            const cell = worksheet[XLSX.utils.encode_cell({ r: range.s.r, c: C })];
+            const headerText = cell ? cell.v.toString().replace(/\r?\n|\r/g, ' ').replace(/\s+/g, ' ').trim() : `Col${C}`;
+            headers.push(headerText);
+        }
+
+        // Process Data Rows
+        for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+            const rowData = { _styles: {} };
+            let hasData = false;
+            for (let C = range.s.c; C <= range.e.c; ++C) {
+                const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+                const cell = worksheet[cellAddress];
+                const header = headers[C];
+                
+                let val = cell ? cell.v : "";
+                if (typeof val === 'string') {
+                    val = val.replace(/\r?\n|\r/g, ' ').replace(/\s+/g, ' ').trim();
+                }
+                
+                rowData[header] = val;
+                if (val !== "") hasData = true;
+                
+                // Extract Background Color
+                if (cell && cell.s && cell.s.fill && cell.s.fill.fgColor) {
+                    rowData._styles[header] = cell.s.fill.fgColor.rgb || cell.s.fill.fgColor.theme;
+                }
+            }
+            if (hasData) rows.push(rowData);
+        }
+
+        spreadsheetData = rows;
         updateDropdown('tap', '');
         updateDropdown('stirrup', '');
         displayResult('Ready', 'default');
     } catch (e) {
-        console.error("Load Error:", e);
-        displayResult('Error Data', 'default');
+        console.error(e);
+        displayResult('Excel Error', 'default');
     }
+}
+
+function calculate() {
+    if (!tapSelection || !stirrupSelection) {
+        displayResult('Ready', 'default');
+        return;
+    }
+
+    const conductorKey = Object.keys(spreadsheetData[0])[0];
+    const row = spreadsheetData.find(r => String(r[conductorKey]).trim() === tapSelection.trim());
+
+    if (!row) {
+        displayResult('No Match', 'default');
+        return;
+    }
+
+    const value = row[stirrupSelection];
+    const hexColor = row._styles[stirrupSelection];
+
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+        let themeKey = 'default';
+
+        // 1. Theme by Excel Hex
+        if (hexColor && colorMap[hexColor]) {
+            themeKey = colorMap[hexColor];
+        } 
+        // 2. Fallback: Word detection
+        else {
+            const lowVal = String(value).toLowerCase();
+            if (lowVal.includes('blue')) themeKey = 'blue';
+            else if (lowVal.includes('yellow')) themeKey = 'yellow';
+            else if (lowVal.includes('red')) themeKey = 'red';
+            else if (lowVal.includes('white')) themeKey = 'white';
+            else if (lowVal.includes('copper')) themeKey = 'copper';
+        }
+
+        // Clean text output
+        const cleanVal = String(value).replace(/\b(blue|yellow|white|red|copper)\b/gi, '').trim();
+        displayResult(cleanVal, themeKey);
+    } else {
+        displayResult('No Match', 'default');
+    }
+}
+
+function setupEventListeners() {
+    document.getElementById('tap-search').addEventListener('input', (e) => updateDropdown('tap', e.target.value));
+    document.getElementById('stirrup-search').addEventListener('input', (e) => updateDropdown('stirrup', e.target.value));
+    document.getElementById('tap-select').addEventListener('change', (e) => { tapSelection = e.target.value; calculate(); });
+    document.getElementById('stirrup-select').addEventListener('change', (e) => { stirrupSelection = e.target.value; calculate(); });
+    document.getElementById('reset-button').addEventListener('click', resetAll);
+    
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        document.getElementById('install-button').style.display = 'block';
+    });
+
+    document.getElementById('install-button').addEventListener('click', async () => {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            await deferredPrompt.userChoice;
+            deferredPrompt = null;
+            document.getElementById('install-button').style.display = 'none';
+        }
+    });
 }
 
 function updateDropdown(type, query) {
     const select = document.getElementById(`${type}-select`);
     if (!spreadsheetData.length) return;
     
-    // First column is the "Tap" list
     const conductorKey = Object.keys(spreadsheetData[0])[0];
     const prev = select.value;
     select.innerHTML = '';
@@ -126,64 +188,26 @@ function updateDropdown(type, query) {
     if (prev && Array.from(select.options).some(o => o.value === prev)) select.value = prev;
 }
 
-function calculate() {
-    if (!tapSelection || !stirrupSelection) {
-        displayResult('Ready', 'default');
-        return;
-    }
-
-    const conductorKey = Object.keys(spreadsheetData[0])[0];
-    const row = spreadsheetData.find(r => String(r[conductorKey]).trim() === tapSelection.trim());
-
-    if (!row) {
-        displayResult('No Match', 'default');
-        return;
-    }
-
-    const rawVal = row[stirrupSelection];
-    
-    if (rawVal && String(rawVal).trim() !== "") {
-        const valStr = String(rawVal).trim();
-        const lowerVal = valStr.toLowerCase();
-        
-        let themeKey = 'default';
-        if (lowerVal.includes('blue')) themeKey = 'blue';
-        else if (lowerVal.includes('yellow')) themeKey = 'yellow';
-        else if (lowerVal.includes('white')) themeKey = 'white';
-        else if (lowerVal.includes('red')) themeKey = 'red';
-        else if (lowerVal.includes('copper')) themeKey = 'copper';
-        
-        const cleanVal = valStr.replace(/\b(blue|yellow|white|red|copper)\b/gi, '').trim();
-        displayResult(cleanVal, themeKey);
-    } else {
-        displayResult('No Match', 'default');
-    }
-}
-
 function displayResult(text, key) {
     const output = document.getElementById('output');
     const box = document.getElementById('output-box');
     const body = document.getElementById('body-bg');
-    const versionDisp = document.getElementById('version-display');
     const githubLink = document.getElementById('github-link');
-    const theme = colorThemes[key];
+    const versionDisp = document.getElementById('version-display');
+    const theme = colorThemes[key] || colorThemes['default'];
     
     body.style.backgroundColor = theme.body;
     box.className = `p-8 rounded-2xl border-4 text-center min-h-[140px] flex flex-col items-center justify-center shadow-lg transition-all duration-500 ${theme.bg} ${theme.border}`;
     
-    if (text.length > 12) {
-        output.className = `text-xl font-black uppercase tracking-tight ${theme.text}`;
-    } else if (text.length > 8) {
-        output.className = `text-2xl font-black uppercase tracking-tight ${theme.text}`;
-    } else {
-        output.className = `text-3xl font-black uppercase tracking-widest ${theme.text}`;
-    }
+    if (text.length > 15) output.className = `text-lg font-black uppercase text-center ${theme.text}`;
+    else if (text.length > 10) output.className = `text-2xl font-black uppercase text-center ${theme.text}`;
+    else output.className = `text-3xl font-black uppercase tracking-widest text-center ${theme.text}`;
     
     output.textContent = text;
-    
+
     const isDark = (key === 'blue' || key === 'red' || key === 'copper');
-    if (versionDisp) versionDisp.style.color = isDark ? '#fff' : '';
     if (githubLink) githubLink.style.color = isDark ? '#fff' : '';
+    if (versionDisp) versionDisp.style.color = isDark ? '#fff' : '';
 }
 
 function resetAll() {
