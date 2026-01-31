@@ -1,27 +1,20 @@
 /**
- * Ducky's AMPACT Selector - v4.3.0
- * Robust Excel Parsing for Main X-Ref Chart with Multi-line Headers
+ * Ducky's AMPACT Selector - v4.5.0
+ * Robust Multi-tab Excel Engine with Style Detection
  */
 let spreadsheetData = [];
 let tapSelection = '';
 let stirrupSelection = '';
+let conductorHeaderName = "";
 let deferredPrompt = null;
 
-// Expanded mapping for Excel colors
 const colorMap = {
-    'FFFF00': 'yellow',
-    'FFFFFF00': 'yellow',
-    'FFFF0000': 'red',
-    'FF0000FF': 'blue',
-    'FF00B0F0': 'blue',
-    'FF0070C0': 'blue',
-    'FFED7D31': 'copper',
-    'FFC00000': 'red',
-    'FFFFFFFF': 'white',
-    'theme-4': 'blue',
-    'theme-5': 'red',
-    'theme-6': 'yellow',
-    'theme-8': 'copper'
+    'FFFF00': 'yellow', 'FFFFFF00': 'yellow',
+    'FFFF0000': 'red', 'FF0000FF': 'blue',
+    'FF00B0F0': 'blue', 'FF0070C0': 'blue',
+    'FFED7D31': 'copper', 'FFC00000': 'red',
+    'FFFFFFFF': 'white', 'theme-4': 'blue',
+    'theme-5': 'red', 'theme-6': 'yellow', 'theme-8': 'copper'
 };
 
 const colorThemes = {
@@ -35,124 +28,101 @@ const colorThemes = {
 
 document.addEventListener('DOMContentLoaded', initApp);
 
+function clean(str) {
+    if (str === undefined || str === null) return "";
+    return str.toString()
+        .replace(/\r?\n|\r/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 async function initApp() {
     setupEventListeners();
     await loadExcelData();
-}
-
-/**
- * Normalizes strings by removing newlines, extra spaces, and invisible characters
- */
-function cleanString(str) {
-    if (!str) return "";
-    return str.toString()
-        .replace(/\r?\n|\r/g, ' ') // Replace newlines with spaces
-        .replace(/\s+/g, ' ')      // Collapse multiple spaces
-        .trim();                   // Trim edges
 }
 
 async function loadExcelData() {
     try {
         const response = await fetch(`data.xlsx?t=${Date.now()}`);
         if (!response.ok) throw new Error("data.xlsx not found");
-        
         const arrayBuffer = await response.arrayBuffer();
-        const data = new Uint8Array(arrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array', cellStyles: true });
+        const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellStyles: true });
         
-        // Priority: Use the main cross-reference chart tab
-        const mainSheetName = workbook.SheetNames.find(n => 
-            n.toLowerCase().includes('main') || n.toLowerCase().includes('x-ref')
-        ) || workbook.SheetNames[0];
+        // Find the Cross-Reference sheet
+        const sheetName = workbook.SheetNames.find(n => n.includes('Main') || n.includes('x-ref')) || workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const range = XLSX.utils.decode_range(sheet['!ref']);
         
-        const worksheet = workbook.Sheets[mainSheetName];
-        const range = XLSX.utils.decode_range(worksheet['!ref']);
-        const rows = [];
         const headers = [];
-
-        // 1. Process Headers (Row 0)
         for (let C = range.s.c; C <= range.e.c; ++C) {
-            const cell = worksheet[XLSX.utils.encode_cell({ r: range.s.r, c: C })];
-            headers.push(cleanString(cell ? cell.v : `Col${C}`));
+            const cell = sheet[XLSX.utils.encode_cell({ r: range.s.r, c: C })];
+            headers.push(clean(cell ? cell.v : `Col${C}`));
         }
+        conductorHeaderName = headers[0];
 
-        // 2. Process Data Rows
+        const rows = [];
         for (let R = range.s.r + 1; R <= range.e.r; ++R) {
             const rowData = { _styles: {} };
-            let hasData = false;
-            
+            let hasContent = false;
             for (let C = range.s.c; C <= range.e.c; ++C) {
-                const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
-                const cell = worksheet[cellAddress];
-                const header = headers[C];
-                
-                const val = cell ? cleanString(cell.v) : "";
-                rowData[header] = val;
-                
-                if (val !== "") hasData = true;
-                
-                // Color Extraction
-                if (cell && cell.s && cell.s.fill && cell.s.fill.fgColor) {
+                const addr = XLSX.utils.encode_cell({ r: R, c: C });
+                const cell = sheet[addr];
+                const head = headers[C];
+                const val = clean(cell ? cell.v : "");
+                rowData[head] = val;
+                if (val) hasContent = true;
+                if (cell?.s?.fill?.fgColor) {
                     const fg = cell.s.fill.fgColor;
-                    rowData._styles[header] = fg.rgb || (fg.theme !== undefined ? `theme-${fg.theme}` : null);
+                    rowData._styles[head] = fg.rgb || (fg.theme !== undefined ? `theme-${fg.theme}` : null);
                 }
             }
-            if (hasData) rows.push(rowData);
+            if (hasContent) rows.push(rowData);
         }
-
         spreadsheetData = rows;
-        updateDropdown('tap', '');
-        updateDropdown('stirrup', '');
-        displayResult('Ready', 'default');
+        updateDropdowns();
     } catch (e) {
-        console.error("Excel Load Error:", e);
-        displayResult('Excel Error', 'default');
+        console.error(e);
+        displayResult('Load Error', 'default');
     }
 }
 
-function updateDropdown(type, query) {
-    const select = document.getElementById(`${type}-select`);
-    if (!spreadsheetData.length) return;
-    
-    const conductorKey = Object.keys(spreadsheetData[0])[0];
-    const prevValue = select.value;
-    select.innerHTML = '';
-    
-    const promptOpt = document.createElement('option');
-    promptOpt.value = "";
-    promptOpt.textContent = "Select Conductor...";
-    select.appendChild(promptOpt);
+function updateDropdowns() {
+    updateTapOptions('');
+    updateStirrupOptions('');
+}
 
-    const searchLower = query.toLowerCase();
+function updateTapOptions(filter) {
+    const select = document.getElementById('tap-select');
+    const val = select.value;
+    select.innerHTML = '<option value="">Select Tap Conductor...</option>';
+    spreadsheetData.forEach(row => {
+        const name = row[conductorHeaderName];
+        if (name && name.toLowerCase().includes(filter.toLowerCase())) {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            select.appendChild(opt);
+        }
+    });
+    if (Array.from(select.options).some(o => o.value === val)) select.value = val;
+}
 
-    if (type === 'stirrup') {
-        // Headers (except the first one) are the Stirrup options
-        const headers = Object.keys(spreadsheetData[0]).filter(k => k !== '_styles' && k !== conductorKey);
-        headers.forEach(h => {
-            if (h.toLowerCase().includes(searchLower)) {
+function updateStirrupOptions(filter) {
+    const select = document.getElementById('stirrup-select');
+    const val = select.value;
+    select.innerHTML = '<option value="">Select Stirrup Conductor...</option>';
+    if (spreadsheetData.length > 0) {
+        const heads = Object.keys(spreadsheetData[0]).filter(k => k !== '_styles' && k !== conductorHeaderName);
+        heads.forEach(h => {
+            if (h.toLowerCase().includes(filter.toLowerCase())) {
                 const opt = document.createElement('option');
                 opt.value = h;
                 opt.textContent = h;
                 select.appendChild(opt);
             }
         });
-    } else {
-        // Rows in the first column are the Tap options
-        spreadsheetData.forEach(row => {
-            const val = row[conductorKey];
-            if (val && val.toLowerCase().includes(searchLower)) {
-                const opt = document.createElement('option');
-                opt.value = val;
-                opt.textContent = val;
-                select.appendChild(opt);
-            }
-        });
     }
-
-    // Try to restore previous selection if it still exists in filtered list
-    if (prevValue && Array.from(select.options).some(o => o.value === prevValue)) {
-        select.value = prevValue;
-    }
+    if (Array.from(select.options).some(o => o.value === val)) select.value = val;
 }
 
 function calculate() {
@@ -160,69 +130,51 @@ function calculate() {
         displayResult('Ready', 'default');
         return;
     }
+    const row = spreadsheetData.find(r => r[conductorHeaderName] === tapSelection);
+    if (!row) return displayResult('No Match', 'default');
 
-    const conductorKey = Object.keys(spreadsheetData[0])[0];
-    const row = spreadsheetData.find(r => r[conductorKey] === tapSelection);
+    const result = row[stirrupSelection];
+    const style = row._styles[stirrupSelection];
 
-    if (!row) {
-        displayResult('No Match', 'default');
-        return;
-    }
-
-    const value = row[stirrupSelection];
-    const styleKey = row._styles[stirrupSelection];
-
-    if (value && value.toString().trim() !== "") {
-        let themeKey = 'default';
-
-        if (styleKey && colorMap[styleKey]) {
-            themeKey = colorMap[styleKey];
-        } else {
-            // Text fallback
-            const lowVal = value.toLowerCase();
-            if (lowVal.includes('blue')) themeKey = 'blue';
-            else if (lowVal.includes('yellow')) themeKey = 'yellow';
-            else if (lowVal.includes('red')) themeKey = 'red';
-            else if (lowVal.includes('white')) themeKey = 'white';
-            else if (lowVal.includes('copper')) themeKey = 'copper';
+    if (result) {
+        let theme = 'default';
+        if (style && colorMap[style]) theme = colorMap[style];
+        else {
+            const low = result.toLowerCase();
+            if (low.includes('blue')) theme = 'blue';
+            else if (low.includes('yellow')) theme = 'yellow';
+            else if (low.includes('red')) theme = 'red';
+            else if (low.includes('white')) theme = 'white';
+            else if (low.includes('copper')) theme = 'copper';
         }
-
-        const cleanVal = value.replace(/\b(blue|yellow|white|red|copper)\b/gi, '').trim();
-        displayResult(cleanVal, themeKey);
+        const text = result.replace(/\b(blue|yellow|white|red|copper)\b/gi, '').trim();
+        displayResult(text || result, theme);
     } else {
         displayResult('No Match', 'default');
     }
-}
-
-function setupEventListeners() {
-    document.getElementById('tap-search').addEventListener('input', (e) => updateDropdown('tap', e.target.value));
-    document.getElementById('stirrup-search').addEventListener('input', (e) => updateDropdown('stirrup', e.target.value));
-    document.getElementById('tap-select').addEventListener('change', (e) => { tapSelection = e.target.value; calculate(); });
-    document.getElementById('stirrup-select').addEventListener('change', (e) => { stirrupSelection = e.target.value; calculate(); });
-    document.getElementById('reset-button').addEventListener('click', resetAll);
 }
 
 function displayResult(text, key) {
     const output = document.getElementById('output');
     const box = document.getElementById('output-box');
     const body = document.getElementById('body-bg');
-    const theme = colorThemes[key] || colorThemes['default'];
-    
+    const theme = colorThemes[key] || colorThemes.default;
     body.style.backgroundColor = theme.body;
     box.className = `p-8 rounded-2xl border-4 text-center min-h-[140px] flex flex-col items-center justify-center shadow-lg transition-all duration-500 ${theme.bg} ${theme.border}`;
-    
-    if (text.length > 20) output.className = `text-base font-black uppercase text-center ${theme.text}`;
-    else if (text.length > 12) output.className = `text-xl font-black uppercase text-center ${theme.text}`;
-    else output.className = `text-3xl font-black uppercase tracking-widest text-center ${theme.text}`;
-    
+    output.className = `font-black uppercase text-center ${theme.text} ${text.length > 12 ? 'text-xl' : 'text-3xl'}`;
     output.textContent = text;
 }
 
-function resetAll() {
-    tapSelection = ''; stirrupSelection = '';
-    document.getElementById('tap-search').value = '';
-    document.getElementById('stirrup-search').value = '';
-    updateDropdown('tap', '');
-    updateDropdown('stirrup', '');
-    displayResult('Ready', 'default');
+function setupEventListeners() {
+    document.getElementById('tap-search').addEventListener('input', e => updateTapOptions(e.target.value));
+    document.getElementById('stirrup-search').addEventListener('input', e => updateStirrupOptions(e.target.value));
+    document.getElementById('tap-select').addEventListener('change', e => { tapSelection = e.target.value; calculate(); });
+    document.getElementById('stirrup-select').addEventListener('change', e => { stirrupSelection = e.target.value; calculate(); });
+    document.getElementById('reset-button').addEventListener('click', () => {
+        tapSelection = ''; stirrupSelection = '';
+        document.getElementById('tap-search').value = '';
+        document.getElementById('stirrup-search').value = '';
+        updateDropdowns();
+        displayResult('Ready', 'default');
+    });
 }
