@@ -6,7 +6,6 @@
     <title>Ducky's AMPACT Selector</title>
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- SheetJS for Excel Reading -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap');
@@ -15,6 +14,7 @@
         .glass-card { background-color: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
         .bg-footer { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; width: 100%; z-index: 10; pointer-events: none; }
         .bg-footer a, .bg-footer p { pointer-events: auto; }
+        select { -webkit-appearance: none; appearance: none; }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4" id="body-bg">
@@ -23,22 +23,22 @@
         
         <div class="mb-6">
             <label class="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-widest">Large Side (Tap)</label>
-            <input type="text" id="tap-search" placeholder="Filter Tap..." class="block w-full p-2 mb-2 bg-white/50 border border-gray-300 rounded-lg text-sm outline-none">
-            <select id="tap-select" class="block w-full p-3 bg-white border border-gray-300 rounded-xl font-medium">
-                <option value="">Loading Excel Data...</option>
+            <input type="text" id="tap-search" placeholder="Filter Tap Conductor..." class="block w-full p-2 mb-2 bg-white/50 border border-gray-300 rounded-lg text-sm outline-none focus:border-blue-500">
+            <select id="tap-select" class="block w-full p-3 bg-white border border-gray-300 rounded-xl font-medium cursor-pointer">
+                <option value="">Loading Spreadsheet...</option>
             </select>
         </div>
 
         <div class="mb-8">
             <label class="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-widest">Small Side (Stirrup)</label>
-            <input type="text" id="stirrup-search" placeholder="Filter Stirrup..." class="block w-full p-2 mb-2 bg-white/50 border border-gray-300 rounded-lg text-sm outline-none">
-            <select id="stirrup-select" class="block w-full p-3 bg-white border border-gray-300 rounded-xl font-medium">
-                <option value="">Loading Excel Data...</option>
+            <input type="text" id="stirrup-search" placeholder="Filter Stirrup Conductor..." class="block w-full p-2 mb-2 bg-white/50 border border-gray-300 rounded-lg text-sm outline-none focus:border-blue-500">
+            <select id="stirrup-select" class="block w-full p-3 bg-white border border-gray-300 rounded-xl font-medium cursor-pointer">
+                <option value="">Select Tap First...</option>
             </select>
         </div>
 
         <div id="output-box" class="bg-gray-100 p-8 rounded-2xl border-4 border-white text-center min-h-[140px] flex flex-col items-center justify-center shadow-inner transition-all duration-500">
-            <p id="output" class="text-2xl font-black uppercase tracking-widest text-gray-400 text-center">Ready</p>
+            <p id="output" class="text-2xl font-black uppercase tracking-widest text-gray-400">Ready</p>
         </div>
 
         <div class="flex flex-col gap-3 mt-8">
@@ -49,7 +49,7 @@
 
     <div class="bg-footer">
         <a href="https://github.com/Donald-Win/AMPACT.PWA" id="github-link" target="_blank" class="flex items-center gap-2 text-sm font-bold opacity-60">GitHub: AMPACT.PWA</a>
-        <p id="version-display" class="text-[10px] font-black tracking-[0.2em] opacity-40 uppercase">v4.1.0 (Excel Color Engine)</p>
+        <p id="version-display" class="text-[10px] font-black tracking-[0.2em] opacity-40 uppercase">v4.5.0 (Final Cross-Ref Engine)</p>
     </div>
     <script src="app.js" defer></script>
 </body>
