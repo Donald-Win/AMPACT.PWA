@@ -1,5 +1,5 @@
 /**
- * Ducky's AMPACT Selector - Core Logic v2.0.5
+ * Ducky's AMPACT Selector - Core Logic v2.0.6
  */
 
 let spreadsheetData = [];
@@ -36,6 +36,8 @@ async function loadData() {
     if (await checkKillSwitch()) return;
     try {
         const response = await fetch(`data.json?t=${Date.now()}`);
+        if (!response.ok) throw new Error("Network response was not ok");
+        
         spreadsheetData = await response.json();
         
         // Initial population of full lists
@@ -44,6 +46,7 @@ async function loadData() {
         
         displayResult('Awaiting Selection', 'default');
     } catch (e) {
+        console.error("Data load failed:", e);
         displayResult('Data Error', 'default');
     }
 }
@@ -53,7 +56,8 @@ async function checkKillSwitch() {
         const res = await fetch(`kill-switch.json?t=${Date.now()}`, { cache: 'no-store' });
         const cfg = await res.json();
         if (cfg.disablePWA) {
-            document.getElementById('kill-switch-overlay').classList.remove('hidden');
+            const overlay = document.getElementById('kill-switch-overlay');
+            if (overlay) overlay.classList.remove('hidden');
             return true;
         }
     } catch (e) {}
@@ -66,18 +70,20 @@ function setupEventListeners() {
     const tapSelect = document.getElementById('tap-select');
     const stirrupSelect = document.getElementById('stirrup-select');
 
-    // Reactive Narrowing: Rebuild list while typing
+    // REFACTORED: Immediate reactive narrowing
     tapSearch.addEventListener('input', (e) => {
+        const query = e.target.value;
+        updateDropdown('tap', query);
         handleSearchAnimation(tapSelect);
-        updateDropdown('tap', e.target.value);
     });
 
     stirrupSearch.addEventListener('input', (e) => {
+        const query = e.target.value;
+        updateDropdown('stirrup', query);
         handleSearchAnimation(stirrupSelect);
-        updateDropdown('stirrup', e.target.value);
     });
 
-    // Handle Selections
+    // Handle Selection Changes
     tapSelect.addEventListener('change', (e) => { 
         tapSelection = e.target.value; 
         calculate(); 
@@ -97,41 +103,54 @@ function handleSearchAnimation(element) {
 }
 
 /**
- * Dynamically rebuilds the select options based on search query
+ * Dynamically rebuilds the select options based on search query.
+ * Updated to be more resilient and provide feedback for empty results.
  */
 function updateDropdown(type, query) {
     const select = document.getElementById(`${type}-select`);
-    if (!spreadsheetData.length) return;
+    if (!spreadsheetData || !spreadsheetData.length) return;
 
-    // First key in the JSON is always the Cable/Conductor Name
+    // The first property of the first object is assumed to be the Conductor Name
     const conductorKey = Object.keys(spreadsheetData[0])[0];
     const previousSelection = select.value;
 
-    // Clear current options
-    select.innerHTML = '<option value="">Select Conductor...</option>';
+    // Reset list
+    select.innerHTML = '';
     
-    // Filter the original dataset based on the input query
+    // Filter logic
     const filteredResults = spreadsheetData.filter(row => {
-        const val = row[conductorKey] || "";
+        const val = String(row[conductorKey] || "");
         return val.toLowerCase().includes(query.toLowerCase());
     });
 
-    // Populate with matches
-    filteredResults.forEach(row => {
-        const name = row[conductorKey];
+    if (filteredResults.length === 0) {
         const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
+        opt.value = "";
+        opt.textContent = "No matches found";
         select.appendChild(opt);
-    });
+    } else {
+        // Add default prompt
+        const promptOpt = document.createElement('option');
+        promptOpt.value = "";
+        promptOpt.textContent = query ? `Matches for "${query}"...` : "Select Conductor...";
+        select.appendChild(promptOpt);
 
-    // Attempt to restore previous selection if it's still in the filtered view
+        filteredResults.forEach(row => {
+            const name = row[conductorKey];
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            select.appendChild(opt);
+        });
+    }
+
+    // Smart persistence: If the previously selected value is still in the new list, keep it selected
     if (previousSelection) {
         const exists = Array.from(select.options).some(o => o.value === previousSelection);
         if (exists) {
             select.value = previousSelection;
         } else {
-            // Selection was filtered out, update global state
+            // If it disappeared from the filtered list, we must clear the global selection
             if (type === 'tap') tapSelection = '';
             else stirrupSelection = '';
             calculate();
@@ -147,16 +166,20 @@ function calculate() {
 
     const conductorKey = Object.keys(spreadsheetData[0])[0];
     const row = spreadsheetData.find(r => r[conductorKey] === tapSelection);
+    
+    // The result is stored in the column named after the stirrup selection
     const val = row ? row[stirrupSelection] : null;
 
-    if (val && val.trim() !== "") {
-        const color = val.toLowerCase();
+    if (val && String(val).trim() !== "") {
+        const lowerVal = String(val).toLowerCase();
         let key = 'default';
-        if (color.includes('blue')) key = 'blue';
-        else if (color.includes('yellow')) key = 'yellow';
-        else if (color.includes('white')) key = 'white';
-        else if (color.includes('red')) key = 'red';
-        else if (color.includes('copper')) key = 'copper';
+        
+        if (lowerVal.includes('blue')) key = 'blue';
+        else if (lowerVal.includes('yellow')) key = 'yellow';
+        else if (lowerVal.includes('white')) key = 'white';
+        else if (lowerVal.includes('red')) key = 'red';
+        else if (lowerVal.includes('copper')) key = 'copper';
+        
         displayResult(val, key);
     } else {
         displayResult('No Match', 'default');
@@ -168,6 +191,7 @@ function displayResult(text, key) {
     const box = document.getElementById('output-box');
     const theme = colorThemes[key];
 
+    // Apply Tailwind classes dynamically
     box.className = `p-8 rounded-2xl border-4 text-center min-h-[140px] flex flex-col items-center justify-center shadow-lg transition-all duration-500 ${theme.bg} ${theme.border}`;
     output.className = `text-2xl font-black uppercase tracking-wider ${theme.text}`;
     output.textContent = text;
@@ -176,8 +200,12 @@ function displayResult(text, key) {
 function resetAll() {
     tapSelection = ''; 
     stirrupSelection = '';
-    document.getElementById('tap-search').value = '';
-    document.getElementById('stirrup-search').value = '';
+    const tapSearch = document.getElementById('tap-search');
+    const stirSearch = document.getElementById('stirrup-search');
+    
+    if (tapSearch) tapSearch.value = '';
+    if (stirSearch) stirSearch.value = '';
+    
     updateDropdown('tap', '');
     updateDropdown('stirrup', '');
     displayResult('Awaiting Selection', 'default');
@@ -188,7 +216,11 @@ function handlePWAInstallUI() {
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
-        document.getElementById('install-button').style.display = 'block';
+        const btn = document.getElementById('install-button');
+        if (btn) btn.style.display = 'block';
     });
-    if (isIos) document.getElementById('ios-install-instructions').style.display = 'block';
+    if (isIos) {
+        const iosInstr = document.getElementById('ios-install-instructions');
+        if (iosInstr) iosInstr.style.display = 'block';
+    }
 }
