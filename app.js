@@ -1,5 +1,5 @@
 /**
- * Ducky's AMPACT Selector - Core Logic v2.0.7
+ * Ducky's AMPACT Selector - Core Logic v2.0.8
  */
 
 let spreadsheetData = [];
@@ -7,14 +7,14 @@ let tapSelection = '';
 let stirrupSelection = '';
 let deferredPrompt;
 
-// Professional Color Themes
+// Professional Color Themes mapped to Tailwind/Hex for Body and Result Box
 const colorThemes = {
-    'blue': { bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
-    'yellow': { bg: 'bg-yellow-400', text: 'text-gray-900', border: 'border-yellow-600' },
-    'white': { bg: 'bg-white', text: 'text-gray-900', border: 'border-gray-400' },
-    'red': { bg: 'bg-red-600', text: 'text-white', border: 'border-red-800' },
-    'copper': { bg: 'bg-[#b87333]', text: 'text-white', border: 'border-[#7d4e22]' },
-    'default': { bg: 'bg-gray-200', text: 'text-gray-500', border: 'border-gray-300' }
+    'blue': { body: '#2563eb', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
+    'yellow': { body: '#facc15', bg: 'bg-yellow-400', text: 'text-gray-900', border: 'border-yellow-600' },
+    'white': { body: '#ffffff', bg: 'bg-white', text: 'text-gray-900', border: 'border-gray-300' },
+    'red': { body: '#dc2626', bg: 'bg-red-600', text: 'text-white', border: 'border-red-800' },
+    'copper': { body: '#b87333', bg: 'bg-[#b87333]', text: 'text-white', border: 'border-[#7d4e22]' },
+    'default': { body: '#f3f4f6', bg: 'bg-gray-100', text: 'text-gray-400', border: 'border-white' }
 };
 
 document.addEventListener('DOMContentLoaded', initApp);
@@ -36,18 +36,12 @@ async function loadData() {
     if (await checkKillSwitch()) return;
     try {
         const response = await fetch(`data.json?t=${Date.now()}`);
-        if (!response.ok) throw new Error("Network response was not ok");
-        
         spreadsheetData = await response.json();
-        
-        // Initial population of full lists
         updateDropdown('tap', '');
         updateDropdown('stirrup', '');
-        
-        displayResult('Awaiting Selection', 'default');
+        displayResult('Ready', 'default');
     } catch (e) {
-        console.error("Data load failed:", e);
-        displayResult('Data Error', 'default');
+        displayResult('Error', 'default');
     }
 }
 
@@ -56,8 +50,7 @@ async function checkKillSwitch() {
         const res = await fetch(`kill-switch.json?t=${Date.now()}`, { cache: 'no-store' });
         const cfg = await res.json();
         if (cfg.disablePWA) {
-            const overlay = document.getElementById('kill-switch-overlay');
-            if (overlay) overlay.classList.remove('hidden');
+            document.getElementById('kill-switch-overlay')?.classList.remove('hidden');
             return true;
         }
     } catch (e) {}
@@ -70,7 +63,6 @@ function setupEventListeners() {
     const tapSelect = document.getElementById('tap-select');
     const stirrupSelect = document.getElementById('stirrup-select');
 
-    // Live reactive narrowing
     tapSearch.addEventListener('input', (e) => {
         updateDropdown('tap', e.target.value);
         handleSearchAnimation(tapSelect);
@@ -81,16 +73,8 @@ function setupEventListeners() {
         handleSearchAnimation(stirrupSelect);
     });
 
-    // Selection Changes
-    tapSelect.addEventListener('change', (e) => { 
-        tapSelection = e.target.value; 
-        calculate(); 
-    });
-
-    stirrupSelect.addEventListener('change', (e) => { 
-        stirrupSelection = e.target.value; 
-        calculate(); 
-    });
+    tapSelect.addEventListener('change', (e) => { tapSelection = e.target.value; calculate(); });
+    stirrupSelect.addEventListener('change', (e) => { stirrupSelection = e.target.value; calculate(); });
 
     document.getElementById('reset-button').addEventListener('click', resetAll);
 }
@@ -100,38 +84,28 @@ function handleSearchAnimation(element) {
     setTimeout(() => element.classList.remove('filtering'), 400);
 }
 
-/**
- * Dynamically rebuilds the select options based on search query.
- */
 function updateDropdown(type, query) {
     const select = document.getElementById(`${type}-select`);
-    if (!spreadsheetData || !spreadsheetData.length) return;
+    if (!spreadsheetData.length) return;
 
     const conductorKey = Object.keys(spreadsheetData[0])[0];
     const previousSelection = select.value;
 
     select.innerHTML = '';
     
-    const filteredResults = spreadsheetData.filter(row => {
-        const val = String(row[conductorKey] || "");
-        return val.toLowerCase().includes(query.toLowerCase());
-    });
+    const filteredResults = spreadsheetData.filter(row => 
+        String(row[conductorKey] || "").toLowerCase().includes(query.toLowerCase())
+    );
 
     if (filteredResults.length === 0) {
-        const opt = document.createElement('option');
-        opt.value = "";
-        opt.textContent = "No matches found";
-        select.appendChild(opt);
+        select.innerHTML = '<option value="">No matches found</option>';
     } else {
-        // Only show "Select Conductor" prompt if search is empty
-        // If searching, show the first result immediately for easier tapping
         if (!query) {
             const promptOpt = document.createElement('option');
             promptOpt.value = "";
             promptOpt.textContent = "Select Conductor...";
             select.appendChild(promptOpt);
         }
-
         filteredResults.forEach(row => {
             const name = row[conductorKey];
             const opt = document.createElement('option');
@@ -141,40 +115,41 @@ function updateDropdown(type, query) {
         });
     }
 
-    // Keep current selection if it matches new filter
-    if (previousSelection) {
-        const exists = Array.from(select.options).some(o => o.value === previousSelection);
-        if (exists) {
-            select.value = previousSelection;
-        } else {
-            if (type === 'tap') tapSelection = '';
-            else stirrupSelection = '';
-            calculate();
-        }
+    if (previousSelection && Array.from(select.options).some(o => o.value === previousSelection)) {
+        select.value = previousSelection;
+    } else {
+        if (type === 'tap') tapSelection = '';
+        else stirrupSelection = '';
+        calculate();
     }
 }
 
 function calculate() {
     if (!tapSelection || !stirrupSelection) {
-        displayResult('Awaiting Selection', 'default');
+        displayResult('Ready', 'default');
         return;
     }
 
     const conductorKey = Object.keys(spreadsheetData[0])[0];
     const row = spreadsheetData.find(r => r[conductorKey] === tapSelection);
-    const val = row ? row[stirrupSelection] : null;
+    const rawVal = row ? row[stirrupSelection] : null;
 
-    if (val && String(val).trim() !== "") {
-        const lowerVal = String(val).toLowerCase();
+    if (rawVal && String(rawVal).trim() !== "") {
+        const valStr = String(rawVal);
+        const lowerVal = valStr.toLowerCase();
         let key = 'default';
         
+        // Determine Color Key
         if (lowerVal.includes('blue')) key = 'blue';
         else if (lowerVal.includes('yellow')) key = 'yellow';
         else if (lowerVal.includes('white')) key = 'white';
         else if (lowerVal.includes('red')) key = 'red';
         else if (lowerVal.includes('copper')) key = 'copper';
         
-        displayResult(val, key);
+        // STRIP COLOR NAMES FROM DISPLAY: Remove Blue, Yellow, etc. from the string
+        const cleanVal = valStr.replace(/\b(Blue|Yellow|White|Red|Copper)\b/gi, '').trim();
+        
+        displayResult(cleanVal, key);
     } else {
         displayResult('No Match', 'default');
     }
@@ -183,21 +158,25 @@ function calculate() {
 function displayResult(text, key) {
     const output = document.getElementById('output');
     const box = document.getElementById('output-box');
+    const body = document.getElementById('body-bg');
     const theme = colorThemes[key];
 
+    // Change Main Body Background
+    body.style.backgroundColor = theme.body;
+
+    // Style Result Box
     box.className = `p-8 rounded-2xl border-4 text-center min-h-[140px] flex flex-col items-center justify-center shadow-lg transition-all duration-500 ${theme.bg} ${theme.border}`;
-    output.className = `text-2xl font-black uppercase tracking-wider ${theme.text}`;
+    output.className = `text-3xl font-black uppercase tracking-widest ${theme.text}`;
     output.textContent = text;
 }
 
 function resetAll() {
-    tapSelection = ''; 
-    stirrupSelection = '';
+    tapSelection = ''; stirrupSelection = '';
     document.getElementById('tap-search').value = '';
     document.getElementById('stirrup-search').value = '';
     updateDropdown('tap', '');
     updateDropdown('stirrup', '');
-    displayResult('Awaiting Selection', 'default');
+    displayResult('Ready', 'default');
 }
 
 function handlePWAInstallUI() {
