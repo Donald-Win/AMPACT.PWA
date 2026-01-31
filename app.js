@@ -1,6 +1,6 @@
 /**
- * Ducky's AMPACT Selector - Core Logic v2.0.14
- * Fixed: Part numbers starting with "1-" and strict matching for Butterfly
+ * Ducky's AMPACT Selector - Core Logic v2.0.15
+ * Robust Matching Engine for special characters and part numbers
  */
 let spreadsheetData = [];
 let tapSelection = '';
@@ -48,10 +48,8 @@ function setupEventListeners() {
 
     tapSearch.addEventListener('input', (e) => updateDropdown('tap', e.target.value));
     stirrupSearch.addEventListener('input', (e) => updateDropdown('stirrup', e.target.value));
-    
     tapSelect.addEventListener('change', (e) => { tapSelection = e.target.value; calculate(); });
     stirrupSelect.addEventListener('change', (e) => { stirrupSelection = e.target.value; calculate(); });
-    
     document.getElementById('reset-button').addEventListener('click', resetAll);
 
     installBtn.addEventListener('click', async () => {
@@ -114,7 +112,7 @@ function calculate() {
 
     const conductorKey = Object.keys(spreadsheetData[0])[0];
     
-    // Find the row by comparing trimmed values
+    // 1. Find the correct row (Tap)
     const row = spreadsheetData.find(r => 
         String(r[conductorKey]).trim() === tapSelection.trim()
     );
@@ -124,29 +122,34 @@ function calculate() {
         return;
     }
 
-    // Direct lookup first, fallback to fuzzy key match
-    let rawVal = row[stirrupSelection];
+    // 2. Find the correct column (Stirrup)
+    // We iterate through all keys to find the one that matches our stirrup selection
+    // this avoids issues with parentheses or bracket notation failures.
+    let rawVal = null;
+    const targetKey = stirrupSelection.trim().toLowerCase();
     
-    if (rawVal === undefined || rawVal === null) {
-        const matchedKey = Object.keys(row).find(k => k.trim() === stirrupSelection.trim());
-        rawVal = matchedKey ? row[matchedKey] : null;
+    for (let key in row) {
+        if (key.trim().toLowerCase() === targetKey) {
+            rawVal = row[key];
+            break;
+        }
     }
     
     if (rawVal && String(rawVal).trim() !== "") {
         const valStr = String(rawVal).trim();
         const lowerVal = valStr.toLowerCase();
         
-        let key = 'default';
-        if (lowerVal.includes('blue')) key = 'blue';
-        else if (lowerVal.includes('yellow')) key = 'yellow';
-        else if (lowerVal.includes('white')) key = 'white';
-        else if (lowerVal.includes('red')) key = 'red';
-        else if (lowerVal.includes('copper')) key = 'copper';
+        let themeKey = 'default';
+        if (lowerVal.includes('blue')) themeKey = 'blue';
+        else if (lowerVal.includes('yellow')) themeKey = 'yellow';
+        else if (lowerVal.includes('white')) themeKey = 'white';
+        else if (lowerVal.includes('red')) themeKey = 'red';
+        else if (lowerVal.includes('copper')) themeKey = 'copper';
         
-        // Clean text: Remove color words but KEEP hyphens and numbers (critical for 1-602031-2)
+        // Remove color names but keep part numbers like 1-602031-2
         const cleanVal = valStr.replace(/\b(blue|yellow|white|red|copper)\b/gi, '').trim();
         
-        displayResult(cleanVal, key);
+        displayResult(cleanVal, themeKey);
     } else {
         displayResult('No Match', 'default');
     }
@@ -163,7 +166,7 @@ function displayResult(text, key) {
     body.style.backgroundColor = theme.body;
     box.className = `p-8 rounded-2xl border-4 text-center min-h-[140px] flex flex-col items-center justify-center shadow-lg transition-all duration-500 ${theme.bg} ${theme.border}`;
     
-    // Dynamic text sizing for long part numbers
+    // Scale text for long part numbers
     if (text.length > 10) {
         output.className = `text-2xl font-black uppercase tracking-tight ${theme.text}`;
     } else {
