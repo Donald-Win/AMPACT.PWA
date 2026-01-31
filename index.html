@@ -12,7 +12,7 @@
         .flash-success { animation: flash-green 0.6s ease-out; }
         @keyframes flash-green {
             0% { background-color: #22c55e; border-color: #166534; transform: scale(1); }
-            50% { transform: scale(1.02); }
+            50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
         select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236B7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 1rem; }
@@ -24,11 +24,10 @@
         <div class="bg-white rounded-[2.5rem] shadow-2xl p-8 border border-gray-100">
             <header class="text-center mb-8">
                 <h1 class="text-4xl font-black text-gray-900 tracking-tighter uppercase mb-1">AMPACT Selector</h1>
-                <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Created and Maintained by Donald Win</p>
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Created and Maintained by Donald Win</p>
             </header>
 
             <div class="space-y-6">
-                <!-- Conductor 1 Group -->
                 <div class="space-y-2">
                     <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Conductor 1</label>
                     <input type="text" id="tap-search" placeholder="Search conductor..." 
@@ -38,7 +37,6 @@
                     </select>
                 </div>
 
-                <!-- Conductor 2 Group -->
                 <div class="space-y-2">
                     <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Conductor 2</label>
                     <input type="text" id="stirrup-search" placeholder="Search conductor..." 
@@ -48,27 +46,25 @@
                     </select>
                 </div>
 
-                <!-- Result Area -->
                 <div id="output-box" class="bg-gray-50 border-gray-200 border-4">
                     <div id="output">
                         <div class="text-gray-300 font-black text-4xl uppercase tracking-tighter">READY</div>
                     </div>
                 </div>
 
-                <button id="reset-button" class="w-full py-5 text-gray-400 font-black uppercase tracking-widest text-xs hover:text-gray-600 transition-colors">
+                <button id="reset-button" class="w-full py-2 text-gray-400 font-black uppercase tracking-widest text-[10px] hover:text-gray-600 transition-colors">
                     Clear Selection
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Footer Restoration -->
     <footer class="mt-auto py-6 text-center space-y-2">
         <a href="https://github.com/donald-win/AMPACT.PWA" target="_blank" class="text-white/50 hover:text-white text-[10px] font-bold uppercase tracking-widest transition-colors block">
             GitHub: AMPACT.PWA
         </a>
         <div id="version-tag" class="text-white/30 text-[10px] font-black uppercase tracking-widest">
-            v5.8.1 (EXCEL COLOR ENGINE)
+            v5.8.5
         </div>
     </footer>
 
