@@ -1,6 +1,6 @@
 /**
- * AMPACT Selector - v6.3.5
- * Created and Maintained by Donald Win
+ * AMPACT Selector - v6.3.7
+ * Fix: Reverted to relative paths to restore functionality
  */
 let themedDatabase = {}; 
 let copperDatabase = {}; 
@@ -8,7 +8,7 @@ let conductorOptions = [];
 let selection1 = '';
 let selection2 = '';
 let deferredPrompt = null;
-const APP_VERSION = "v6.3.5";
+const APP_VERSION = "v6.3.7";
 
 const colorThemes = {
     'blue': { body: '#2563eb', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
@@ -47,7 +47,7 @@ async function initApp() {
 
 async function loadExcelData() {
     try {
-        const response = await fetch(`data.xlsx?t=${Date.now()}`);
+        const response = await fetch(`./data.xlsx?t=${Date.now()}`);
         if (!response.ok) throw new Error("File not found");
         
         const arrayBuffer = await response.arrayBuffer();
@@ -262,12 +262,10 @@ function setupPWA() {
     const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
 
-    // 1. iOS Check
     if (isIos && !isStandalone) {
         if (iosInstr) iosInstr.classList.remove('hidden');
     }
 
-    // 2. Android/Desktop Listener
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
@@ -276,13 +274,12 @@ function setupPWA() {
         }
     });
 
-    // 3. Forced Visibility Fallback (Show if not standalone and not iOS)
+    // Fallback visibility for Android/Chrome
     setTimeout(() => {
         if (!isStandalone && !isIos && installBtn && installBtn.classList.contains('hidden')) {
-            console.log("Forcing Install Button visibility via fallback.");
             installBtn.classList.remove('hidden');
         }
-    }, 2000);
+    }, 3000);
 
     if (installBtn) {
         installBtn.addEventListener('click', async () => {
@@ -292,8 +289,7 @@ function setupPWA() {
                 if (outcome === 'accepted') installBtn.classList.add('hidden');
                 deferredPrompt = null;
             } else if (!isIos) {
-                // If button clicked but browser hasn't fired prompt event yet
-                alert("Installation is ready. Tap the three dots (⋮) in your browser menu and select 'Install App' or 'Add to Home Screen'.");
+                alert("Please tap the three dots (⋮) in your browser menu and select 'Install App' or 'Add to Home Screen'.");
             }
         });
     }
