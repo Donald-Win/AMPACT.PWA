@@ -1,12 +1,13 @@
 /**
- * Ducky's AMPACT Selector - v5.8.0
- * Vertical Stacking + Clean Copper Display
+ * Ducky's AMPACT Selector - v5.8.1
+ * Created and Maintained by Donald Win
  */
 let themedDatabase = {}; 
 let copperDatabase = {}; 
 let conductorOptions = new Set();
 let selection1 = '';
 let selection2 = '';
+const APP_VERSION = "v5.8.1";
 
 const colorThemes = {
     'blue': { body: '#2563eb', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
@@ -19,9 +20,6 @@ const colorThemes = {
 
 document.addEventListener('DOMContentLoaded', initApp);
 
-/**
- * Normalizes strings for matching by removing non-alphanumeric chars
- */
 function normalize(str) {
     if (!str) return "";
     return str.toString().toLowerCase()
@@ -46,6 +44,7 @@ function getDiameter(name) {
 
 async function initApp() {
     setupEventListeners();
+    document.getElementById('version-tag').textContent = `${APP_VERSION} (EXCEL COLOR ENGINE)`;
     await loadExcelData();
 }
 
@@ -105,29 +104,22 @@ async function loadExcelData() {
         });
 
         updateDropdowns('', '');
-        displayResult('Ready', 'default');
+        displayResult('Ready', 'default', false);
     } catch (e) {
         console.error("Data Load Error:", e);
-        displayResult('Load Error', 'default');
+        displayResult('EXCEL ERROR', 'default', false);
     }
 }
 
 function calculate() {
     if (!selection1 || !selection2) {
-        displayResult('Ready', 'default');
+        displayResult('Ready', 'default', false);
         return;
     }
 
-    const dia1 = getDiameter(selection1);
-    const dia2 = getDiameter(selection2);
-
-    let tNorm = normalize(selection1);
-    let sNorm = normalize(selection2);
-
-    let keysToTry = [
-        `${tNorm}|${sNorm}`,
-        `${sNorm}|${tNorm}`
-    ];
+    const tNorm = normalize(selection1);
+    const sNorm = normalize(selection2);
+    const keysToTry = [`${tNorm}|${sNorm}`, `${sNorm}|${tNorm}`];
 
     let resultFound = false;
 
@@ -144,7 +136,7 @@ function calculate() {
                     theme = 'copper';
                 }
             }
-            displayResult(text, theme);
+            displayResult(text, theme, true);
             resultFound = true;
             break;
         }
@@ -153,9 +145,9 @@ function calculate() {
     if (!resultFound) {
         const copperVal = copperDatabase[keysToTry[0]] || copperDatabase[keysToTry[1]];
         if (copperVal) {
-            displayResult(copperVal, 'copper');
+            displayResult(copperVal, 'copper', true);
         } else {
-            displayResult('No Match', 'default');
+            displayResult('NO MATCH', 'default', false);
         }
     }
 }
@@ -168,49 +160,54 @@ function updateDropdowns(filter1, filter2) {
 
     const sortedList = [...conductorOptions].sort();
 
-    sel1.innerHTML = '<option value="">Select Conductor 1...</option>';
-    sel2.innerHTML = '<option value="">Select Conductor 2...</option>';
+    sel1.innerHTML = '<option value="">Select Conductor...</option>';
+    sel2.innerHTML = '<option value="">Select Conductor...</option>';
 
     sortedList.forEach(name => {
-        if (name.toLowerCase().includes(filter1.toLowerCase())) {
+        if (!filter1 || name.toLowerCase().includes(filter1.toLowerCase())) {
             const opt = document.createElement('option');
             opt.value = opt.textContent = name;
             sel1.appendChild(opt);
         }
-        if (name.toLowerCase().includes(filter2.toLowerCase())) {
+        if (!filter2 || name.toLowerCase().includes(filter2.toLowerCase())) {
             const opt = document.createElement('option');
             opt.value = opt.textContent = name;
             sel2.appendChild(opt);
         }
     });
 
+    // Keep the selection if it still exists in filtered list
     sel1.value = old1;
     sel2.value = old2;
 }
 
-function displayResult(text, key) {
+function displayResult(text, key, shouldFlash) {
     const output = document.getElementById('output');
     const box = document.getElementById('output-box');
     const body = document.getElementById('body-bg');
     const theme = colorThemes[key] || colorThemes.default;
     
     body.style.backgroundColor = theme.body;
+    
+    // Trigger success flash if needed
+    if (shouldFlash) {
+        box.classList.add('flash-success');
+        setTimeout(() => box.classList.remove('flash-success'), 600);
+    }
+
     box.className = `p-4 rounded-3xl border-4 text-center min-h-[180px] w-full flex flex-col items-center justify-center shadow-lg transition-all duration-500 ${theme.bg} ${theme.border}`;
     
-    // Clean text if it's a copper result: remove "Copper", "Cu", "See", "Sheet", "Chart"
     let cleanText = text;
     if (key === 'copper') {
         cleanText = text.replace(/copper|cu|see|sheet|chart|refer/gi, '').trim();
-        // Fallback in case cleaning makes it empty (e.g. if the result was just "See Copper Chart")
-        if (!cleanText) cleanText = "SEE CHART";
+        if (!cleanText) cleanText = "CHECK CHART";
     }
 
     output.innerHTML = '';
-    
     const parts = cleanText.split(/\s+/).filter(p => p.trim() !== "");
     
     if (parts.length > 1 && !cleanText.toLowerCase().includes("ready")) {
-        parts.forEach((part, index) => {
+        parts.forEach((part) => {
             const item = document.createElement('div');
             let fontSize = 'text-3xl';
             if (parts.length > 2) fontSize = 'text-2xl';
@@ -219,12 +216,7 @@ function displayResult(text, key) {
             item.className = `font-black uppercase tracking-tight py-1 ${theme.text} ${fontSize}`;
             item.textContent = part.trim();
             output.appendChild(item);
-            
-            if (index < parts.length - 1) {
-                const divider = document.createElement('div');
-                divider.className = `w-8 h-0.5 my-1 opacity-20 ${key === 'white' ? 'bg-black' : 'bg-white'}`;
-                output.appendChild(divider);
-            }
+            // Removed horizontal dividers as requested
         });
     } else {
         const item = document.createElement('div');
@@ -236,11 +228,23 @@ function displayResult(text, key) {
 }
 
 function setupEventListeners() {
-    document.getElementById('tap-search').addEventListener('input', e => updateDropdowns(e.target.value, document.getElementById('stirrup-search').value));
-    document.getElementById('stirrup-search').addEventListener('input', e => updateDropdowns(document.getElementById('tap-search').value, e.target.value));
+    document.getElementById('tap-search').addEventListener('input', e => {
+        updateDropdowns(e.target.value, document.getElementById('stirrup-search').value);
+    });
     
-    document.getElementById('tap-select').addEventListener('change', e => { selection1 = e.target.value; calculate(); });
-    document.getElementById('stirrup-select').addEventListener('change', e => { selection2 = e.target.value; calculate(); });
+    document.getElementById('stirrup-search').addEventListener('input', e => {
+        updateDropdowns(document.getElementById('tap-search').value, e.target.value);
+    });
+    
+    document.getElementById('tap-select').addEventListener('change', e => { 
+        selection1 = e.target.value; 
+        calculate(); 
+    });
+    
+    document.getElementById('stirrup-select').addEventListener('change', e => { 
+        selection2 = e.target.value; 
+        calculate(); 
+    });
     
     document.getElementById('reset-button').addEventListener('click', () => {
         selection1 = ''; selection2 = '';
@@ -249,6 +253,6 @@ function setupEventListeners() {
         document.getElementById('tap-select').value = '';
         document.getElementById('stirrup-select').value = '';
         updateDropdowns('', '');
-        displayResult('Ready', 'default');
+        displayResult('Ready', 'default', false);
     });
 }
