@@ -1,11 +1,21 @@
 /**
- * Ducky's AMPACT Selector - Core Logic
+ * Ducky's AMPACT Selector - Core Logic v2.0.2
  */
 
 let spreadsheetData = [];
 let tapSelection = '';
 let stirrupSelection = '';
 let deferredPrompt;
+
+// Color Mapping Configuration
+const colorMap = {
+    'blue': { bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-700' },
+    'yellow': { bg: 'bg-yellow-400', text: 'text-gray-900', border: 'border-yellow-500' },
+    'white': { bg: 'bg-white', text: 'text-gray-900', border: 'border-gray-300' },
+    'red': { bg: 'bg-red-600', text: 'text-white', border: 'border-red-700' },
+    'copper': { bg: 'bg-[#b87333]', text: 'text-white', border: 'border-[#8b5a2b]' },
+    'default': { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' }
+};
 
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
@@ -22,191 +32,171 @@ function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('service-worker.js')
-                .then(reg => console.log('SW: Registered', reg.scope))
+                .then(reg => console.log('SW: Registered'))
                 .catch(err => console.error('SW: Failed', err));
         });
     }
 }
 
-function handlePWAInstallUI() {
-    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        if (!isIos && !isStandalone) {
-            const btn = document.getElementById('install-button');
-            if (btn) btn.style.display = 'block';
-        }
-    });
-
-    if (isIos && !isStandalone) {
-        const iosBox = document.getElementById('ios-install-instructions');
-        if (iosBox) iosBox.style.display = 'block';
-    }
-
-    window.addEventListener('appinstalled', () => {
-        document.getElementById('install-button').style.display = 'none';
-        document.getElementById('ios-install-instructions').style.display = 'none';
-    });
-}
-
 async function loadData() {
-    const outputElement = document.getElementById('output');
-    
-    // Check Kill Switch First
-    const isDisabled = await checkClientKillSwitch();
-    if (isDisabled) return;
+    const output = document.getElementById('output');
+    if (await checkClientKillSwitch()) return;
 
     try {
-        // Fetch Data with cache busting to prevent stale loads
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const response = await fetch(`data.json?t=${Date.now()}`);
+        if (!response.ok) throw new Error("Data unreachable");
         
-        const response = await fetch(`data.json?t=${Date.now()}`, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-            throw new Error(`Data file unreachable (Status ${response.status})`);
-        }
-
         const data = await response.json();
-
-        if (!Array.isArray(data) || data.length === 0) {
-            throw new Error("Conductor data is empty or invalid format.");
-        }
+        if (!Array.isArray(data) || data.length === 0) throw new Error("Invalid Data");
 
         spreadsheetData = data;
-        updateDropdowns();
-        displayMessage('Select conductors to find AMPACT', 'text-gray-700');
-
+        displayMessage('Select conductors to find AMPACT', 'default');
     } catch (error) {
-        console.error('Data Load Error:', error);
-        let msg = "⚠️ Error loading data.";
-        if (error.name === 'AbortError') msg = "⚠️ Loading timed out. Check connection.";
-        else if (error.message) msg = `⚠️ ${error.message}`;
-        
-        displayMessage(msg, 'text-red-700');
+        displayMessage(`⚠️ ${error.message}`, 'default');
         showRetryButton();
     }
 }
 
 async function checkClientKillSwitch() {
     try {
-        // Cache bust the kill switch
         const response = await fetch(`kill-switch.json?t=${Date.now()}`, { cache: 'no-store' });
         if (response.ok) {
             const config = await response.json();
-            if (config.disablePWA === true) {
+            if (config.disablePWA) {
                 document.getElementById('kill-switch-overlay').classList.remove('hidden');
                 return true;
             }
         }
-    } catch (e) {
-        console.warn('Kill switch check failed, continuing...');
-    }
+    } catch (e) {}
     return false;
 }
 
 function setupEventListeners() {
-    const tapSelect = document.getElementById('tap-select');
-    const stirrupSelect = document.getElementById('stirrup-select');
-    const resetBtn = document.getElementById('reset-button');
-    const installBtn = document.getElementById('install-button');
+    const tapInput = document.getElementById('tap-search');
+    const stirInput = document.getElementById('stirrup-search');
+    
+    // Search/Filter logic for Tap
+    tapInput.addEventListener('input', (e) => filterDropdown('tap', e.target.value));
+    tapInput.addEventListener('focus', () => filterDropdown('tap', tapInput.value));
+    
+    // Search/Filter logic for Stirrup
+    stirInput.addEventListener('input', (e) => filterDropdown('stirrup', e.target.value));
+    stirInput.addEventListener('focus', () => filterDropdown('stirrup', stirInput.value));
 
-    if (tapSelect) tapSelect.addEventListener('change', (e) => {
-        tapSelection = e.target.value;
-        findResult();
-    });
-
-    if (stirrupSelect) stirrupSelect.addEventListener('change', (e) => {
-        stirrupSelection = e.target.value;
-        findResult();
-    });
-
-    if (resetBtn) resetBtn.addEventListener('click', resetSelection);
-
-    if (installBtn) installBtn.addEventListener('click', () => {
-        if (deferredPrompt) {
-            deferredPrompt.prompt();
-            deferredPrompt.userChoice.then(() => {
-                deferredPrompt = null;
-            });
+    // Close dropdowns on click outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.matches('#tap-search') && !e.target.matches('#stirrup-search')) {
+            hideAllDropdowns();
         }
     });
+
+    document.getElementById('reset-button').addEventListener('click', resetSelection);
 }
 
-function updateDropdowns() {
-    const tapSelect = document.getElementById('tap-select');
-    const stirrupSelect = document.getElementById('stirrup-select');
-    if (!tapSelect || !stirrupSelect || !spreadsheetData.length) return;
-
+function filterDropdown(type, query) {
+    hideAllDropdowns();
+    const dropdown = document.getElementById(`${type}-dropdown`);
     const headers = Object.keys(spreadsheetData[0]);
     const conductorKey = headers[0];
+    
+    const filtered = spreadsheetData.filter(row => 
+        row[conductorKey].toLowerCase().includes(query.toLowerCase())
+    );
 
-    tapSelect.innerHTML = '<option value="">Select Conductor...</option>';
-    stirrupSelect.innerHTML = '<option value="">Select Conductor...</option>';
-
-    spreadsheetData.forEach(row => {
-        const conductorName = row[conductorKey];
-        if (conductorName && conductorName.trim() !== "") {
-            const opt1 = document.createElement('option');
-            opt1.value = conductorName;
-            opt1.textContent = conductorName;
-            tapSelect.appendChild(opt1);
-
-            const opt2 = document.createElement('option');
-            opt2.value = conductorName;
-            opt2.textContent = conductorName;
-            stirrupSelect.appendChild(opt2);
-        }
+    dropdown.innerHTML = '';
+    filtered.forEach(row => {
+        const name = row[conductorKey];
+        const item = document.createElement('div');
+        item.textContent = name;
+        item.onclick = () => selectConductor(type, name);
+        dropdown.appendChild(item);
     });
+
+    if (filtered.length > 0) dropdown.classList.add('show');
+}
+
+function selectConductor(type, value) {
+    document.getElementById(`${type}-search`).value = value;
+    if (type === 'tap') tapSelection = value;
+    else stirrupSelection = value;
+    
+    hideAllDropdowns();
+    findResult();
+}
+
+function hideAllDropdowns() {
+    document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
 }
 
 function findResult() {
     if (!tapSelection || !stirrupSelection) {
-        displayMessage('Select both sides to see result', 'text-gray-500');
+        displayMessage('Select both sides to see result', 'default');
         return;
     }
 
-    // Use the first key as the conductor identifier
     const conductorKey = Object.keys(spreadsheetData[0])[0];
     const row = spreadsheetData.find(r => r[conductorKey] === tapSelection);
     const result = row ? row[stirrupSelection] : null;
 
     if (result && result.trim() !== "") {
-        displayMessage(result, 'text-blue-700');
+        // Extract color from string (e.g., "600455-0 Blue" -> "blue")
+        const lowerResult = result.toLowerCase();
+        let colorKey = 'default';
+        
+        if (lowerResult.includes('blue')) colorKey = 'blue';
+        else if (lowerResult.includes('yellow')) colorKey = 'yellow';
+        else if (lowerResult.includes('white')) colorKey = 'white';
+        else if (lowerResult.includes('red')) colorKey = 'red';
+        else if (lowerResult.includes('copper')) colorKey = 'copper';
+
+        displayMessage(result, colorKey);
     } else {
-        displayMessage('❌ No AMPACT match found', 'text-red-600');
+        displayMessage('❌ No AMPACT match found', 'default');
     }
 }
 
-function displayMessage(text, colorClass) {
+function displayMessage(text, colorKey) {
     const output = document.getElementById('output');
-    if (output) {
-        output.className = `text-xl font-bold leading-tight ${colorClass}`;
-        output.textContent = text;
-    }
+    const box = document.getElementById('output-box');
+    const styles = colorMap[colorKey] || colorMap.default;
+
+    // Remove all possible theme classes
+    Object.values(colorMap).forEach(s => {
+        box.classList.remove(s.bg, s.border);
+        output.classList.remove(s.text);
+    });
+
+    // Apply new theme
+    box.classList.add(styles.bg, styles.border);
+    output.classList.add(styles.text);
+    output.textContent = text;
 }
 
 function resetSelection() {
     tapSelection = '';
     stirrupSelection = '';
-    const tS = document.getElementById('tap-select');
-    const sS = document.getElementById('stirrup-select');
-    if (tS) tS.value = '';
-    if (sS) sS.value = '';
-    displayMessage('Select conductors to find AMPACT', 'text-gray-700');
+    document.getElementById('tap-search').value = '';
+    document.getElementById('stirrup-search').value = '';
+    displayMessage('Select conductors to find AMPACT', 'default');
+}
+
+function handlePWAInstallUI() {
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        document.getElementById('install-button').style.display = 'block';
+    });
+    if (isIos) document.getElementById('ios-install-instructions').style.display = 'block';
 }
 
 function showRetryButton() {
-    const container = document.getElementById('output-container');
-    if (container && !document.getElementById('retry-btn')) {
+    const container = document.getElementById('output-box');
+    if (!document.getElementById('retry-btn')) {
         const btn = document.createElement('button');
         btn.id = 'retry-btn';
-        btn.textContent = "Retry Connection";
-        btn.className = "mt-4 bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm font-medium";
+        btn.textContent = "Retry";
+        btn.className = "mt-2 bg-gray-200 px-3 py-1 rounded text-xs font-bold";
         btn.onclick = () => location.reload();
         container.appendChild(btn);
     }
