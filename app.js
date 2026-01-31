@@ -36,12 +36,14 @@ function handlePWAInstallUI() {
         e.preventDefault();
         deferredPrompt = e;
         if (!isIos && !isStandalone) {
-            document.getElementById('install-button').style.display = 'block';
+            const btn = document.getElementById('install-button');
+            if (btn) btn.style.display = 'block';
         }
     });
 
     if (isIos && !isStandalone) {
-        document.getElementById('ios-install-instructions').style.display = 'block';
+        const iosBox = document.getElementById('ios-install-instructions');
+        if (iosBox) iosBox.style.display = 'block';
     }
 
     window.addEventListener('appinstalled', () => {
@@ -53,25 +55,24 @@ function handlePWAInstallUI() {
 async function loadData() {
     const outputElement = document.getElementById('output');
     
-    // Check Kill Switch
+    // Check Kill Switch First
     const isDisabled = await checkClientKillSwitch();
     if (isDisabled) return;
 
     try {
-        // Fetch Data with timeout
+        // Fetch Data with cache busting to prevent stale loads
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
         
-        const response = await fetch('data.json', { signal: controller.signal });
+        const response = await fetch(`data.json?t=${Date.now()}`, { signal: controller.signal });
         clearTimeout(timeoutId);
 
         if (!response.ok) {
-            throw new Error(`Data file not reachable (Status ${response.status})`);
+            throw new Error(`Data file unreachable (Status ${response.status})`);
         }
 
         const data = await response.json();
 
-        // Validation
         if (!Array.isArray(data) || data.length === 0) {
             throw new Error("Conductor data is empty or invalid format.");
         }
@@ -93,7 +94,8 @@ async function loadData() {
 
 async function checkClientKillSwitch() {
     try {
-        const response = await fetch(`kill-switch.json?t=${Date.now()}`);
+        // Cache bust the kill switch
+        const response = await fetch(`kill-switch.json?t=${Date.now()}`, { cache: 'no-store' });
         if (response.ok) {
             const config = await response.json();
             if (config.disablePWA === true) {
@@ -102,25 +104,30 @@ async function checkClientKillSwitch() {
             }
         }
     } catch (e) {
-        console.warn('Kill switch check failed, defaulting to enabled.', e);
+        console.warn('Kill switch check failed, continuing...');
     }
     return false;
 }
 
 function setupEventListeners() {
-    document.getElementById('tap-select').addEventListener('change', (e) => {
+    const tapSelect = document.getElementById('tap-select');
+    const stirrupSelect = document.getElementById('stirrup-select');
+    const resetBtn = document.getElementById('reset-button');
+    const installBtn = document.getElementById('install-button');
+
+    if (tapSelect) tapSelect.addEventListener('change', (e) => {
         tapSelection = e.target.value;
         findResult();
     });
 
-    document.getElementById('stirrup-select').addEventListener('change', (e) => {
+    if (stirrupSelect) stirrupSelect.addEventListener('change', (e) => {
         stirrupSelection = e.target.value;
         findResult();
     });
 
-    document.getElementById('reset-button').addEventListener('click', resetSelection);
+    if (resetBtn) resetBtn.addEventListener('click', resetSelection);
 
-    document.getElementById('install-button').addEventListener('click', () => {
+    if (installBtn) installBtn.addEventListener('click', () => {
         if (deferredPrompt) {
             deferredPrompt.prompt();
             deferredPrompt.userChoice.then(() => {
@@ -133,6 +140,8 @@ function setupEventListeners() {
 function updateDropdowns() {
     const tapSelect = document.getElementById('tap-select');
     const stirrupSelect = document.getElementById('stirrup-select');
+    if (!tapSelect || !stirrupSelect || !spreadsheetData.length) return;
+
     const headers = Object.keys(spreadsheetData[0]);
     const conductorKey = headers[0];
 
@@ -141,7 +150,7 @@ function updateDropdowns() {
 
     spreadsheetData.forEach(row => {
         const conductorName = row[conductorKey];
-        if (conductorName) {
+        if (conductorName && conductorName.trim() !== "") {
             const opt1 = document.createElement('option');
             opt1.value = conductorName;
             opt1.textContent = conductorName;
@@ -161,7 +170,9 @@ function findResult() {
         return;
     }
 
-    const row = spreadsheetData.find(r => r[Object.keys(r)[0]] === tapSelection);
+    // Use the first key as the conductor identifier
+    const conductorKey = Object.keys(spreadsheetData[0])[0];
+    const row = spreadsheetData.find(r => r[conductorKey] === tapSelection);
     const result = row ? row[stirrupSelection] : null;
 
     if (result && result.trim() !== "") {
@@ -173,21 +184,25 @@ function findResult() {
 
 function displayMessage(text, colorClass) {
     const output = document.getElementById('output');
-    output.className = `text-xl font-bold leading-tight ${colorClass}`;
-    output.textContent = text;
+    if (output) {
+        output.className = `text-xl font-bold leading-tight ${colorClass}`;
+        output.textContent = text;
+    }
 }
 
 function resetSelection() {
     tapSelection = '';
     stirrupSelection = '';
-    document.getElementById('tap-select').value = '';
-    document.getElementById('stirrup-select').value = '';
+    const tS = document.getElementById('tap-select');
+    const sS = document.getElementById('stirrup-select');
+    if (tS) tS.value = '';
+    if (sS) sS.value = '';
     displayMessage('Select conductors to find AMPACT', 'text-gray-700');
 }
 
 function showRetryButton() {
     const container = document.getElementById('output-container');
-    if (!document.getElementById('retry-btn')) {
+    if (container && !document.getElementById('retry-btn')) {
         const btn = document.createElement('button');
         btn.id = 'retry-btn';
         btn.textContent = "Retry Connection";
