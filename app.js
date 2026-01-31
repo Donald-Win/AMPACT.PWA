@@ -1,10 +1,11 @@
 /**
- * Ducky's AMPACT Selector - Core Logic v2.0.10
+ * Ducky's AMPACT Selector - Core Logic v2.0.11
+ * Fixed PWA Install Logic
  */
 let spreadsheetData = [];
 let tapSelection = '';
 let stirrupSelection = '';
-let deferredPrompt;
+let deferredPrompt = null;
 
 const colorThemes = {
     'blue': { body: '#2563eb', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800', footer: 'text-white' },
@@ -19,17 +20,72 @@ document.addEventListener('DOMContentLoaded', initApp);
 
 async function initApp() {
     registerServiceWorker();
-    handlePWAInstallUI();
     setupEventListeners();
     await loadData();
-}
-
-function registerServiceWorker() {
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('service-worker.js').catch(console.error);
+    
+    // Check if already installed
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+        document.getElementById('install-button').style.display = 'none';
     }
 }
 
+// 1. IMPROVED SERVICE WORKER REGISTRATION
+function registerServiceWorker() {
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('service-worker.js')
+                .then(reg => console.log('SW Registered'))
+                .catch(err => console.log('SW Failed', err));
+        });
+    }
+}
+
+// 2. CAPTURING THE INSTALL PROMPT
+window.addEventListener('beforeinstallprompt', (e) => {
+    // Prevent Chrome 67 and earlier from automatically showing the prompt
+    e.preventDefault();
+    // Stash the event so it can be triggered later.
+    deferredPrompt = e;
+    // Show the install button
+    const installBtn = document.getElementById('install-button');
+    if (installBtn) {
+        installBtn.style.display = 'block';
+        console.log('Install prompt is ready');
+    }
+});
+
+function setupEventListeners() {
+    const tapSearch = document.getElementById('tap-search');
+    const stirrupSearch = document.getElementById('stirrup-search');
+    const tapSelect = document.getElementById('tap-select');
+    const stirrupSelect = document.getElementById('stirrup-select');
+    const installBtn = document.getElementById('install-button');
+
+    tapSearch.addEventListener('input', (e) => updateDropdown('tap', e.target.value));
+    stirrupSearch.addEventListener('input', (e) => updateDropdown('stirrup', e.target.value));
+    tapSelect.addEventListener('change', (e) => { tapSelection = e.target.value; calculate(); });
+    stirrupSelect.addEventListener('change', (e) => { stirrupSelection = e.target.value; calculate(); });
+    document.getElementById('reset-button').addEventListener('click', resetAll);
+
+    // 3. UPDATED INSTALL CLICK HANDLER
+    installBtn.addEventListener('click', async () => {
+        if (!deferredPrompt) {
+            // Fallback for when the browser doesn't support the prompt or it hasn't fired yet
+            alert("To install: Tap the browser menu (3 dots) and select 'Install app' or 'Add to Home Screen'.");
+            return;
+        }
+        // Show the prompt
+        deferredPrompt.prompt();
+        // Wait for the user to respond to the prompt
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`User response to install: ${outcome}`);
+        // We've used the prompt, and can't use it again
+        deferredPrompt = null;
+        installBtn.style.display = 'none';
+    });
+}
+
+// Data loading and UI functions remain the same as previous version...
 async function loadData() {
     try {
         const response = await fetch(`data.json?t=${Date.now()}`);
@@ -40,40 +96,6 @@ async function loadData() {
     } catch (e) {
         displayResult('Error', 'default');
     }
-}
-
-function setupEventListeners() {
-    const tapSearch = document.getElementById('tap-search');
-    const stirrupSearch = document.getElementById('stirrup-search');
-    const tapSelect = document.getElementById('tap-select');
-    const stirrupSelect = document.getElementById('stirrup-select');
-    const installBtn = document.getElementById('install-button');
-
-    tapSearch.addEventListener('input', (e) => {
-        updateDropdown('tap', e.target.value);
-    });
-
-    stirrupSearch.addEventListener('input', (e) => {
-        updateDropdown('stirrup', e.target.value);
-    });
-
-    tapSelect.addEventListener('change', (e) => { tapSelection = e.target.value; calculate(); });
-    stirrupSelect.addEventListener('change', (e) => { stirrupSelection = e.target.value; calculate(); });
-
-    document.getElementById('reset-button').addEventListener('click', resetAll);
-
-    // Install logic
-    installBtn.addEventListener('click', async () => {
-        if (deferredPrompt) {
-            deferredPrompt.prompt();
-            const { outcome } = await deferredPrompt.userChoice;
-            if (outcome === 'accepted') {
-                console.log('User accepted the install prompt');
-            }
-            deferredPrompt = null;
-            installBtn.style.display = 'none';
-        }
-    });
 }
 
 function updateDropdown(type, query) {
@@ -126,8 +148,6 @@ function calculate() {
         else if (lowerVal.includes('white')) key = 'white';
         else if (lowerVal.includes('red')) key = 'red';
         else if (lowerVal.includes('copper')) key = 'copper';
-        
-        // Return original casing for the display text
         displayResult(valStr, key);
     } else {
         displayResult('No Match', 'default');
@@ -139,7 +159,6 @@ function displayResult(text, key) {
     const box = document.getElementById('output-box');
     const body = document.getElementById('body-bg');
     const theme = colorThemes[key];
-    
     body.style.backgroundColor = theme.body;
     box.className = `p-8 rounded-2xl border-4 text-center min-h-[140px] flex flex-col items-center justify-center shadow-lg transition-all duration-500 ${theme.bg} ${theme.border}`;
     output.className = `text-3xl font-black uppercase tracking-widest ${theme.text}`;
@@ -153,29 +172,4 @@ function resetAll() {
     updateDropdown('tap', '');
     updateDropdown('stirrup', '');
     displayResult('Ready', 'default');
-}
-
-function handlePWAInstallUI() {
-    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    const installBtn = document.getElementById('install-button');
-
-    window.addEventListener('beforeinstallprompt', (e) => {
-        // Prevent the mini-infobar from appearing on mobile
-        e.preventDefault();
-        // Stash the event so it can be triggered later.
-        deferredPrompt = e;
-        // Update UI notify the user they can install the PWA
-        if (installBtn) installBtn.style.display = 'block';
-    });
-
-    window.addEventListener('appinstalled', (event) => {
-        console.log('App was installed');
-        deferredPrompt = null;
-        if (installBtn) installBtn.style.display = 'none';
-    });
-
-    if (isIos) {
-        const iosInstr = document.getElementById('ios-install-instructions');
-        if (iosInstr) iosInstr.classList.remove('hidden');
-    }
 }
