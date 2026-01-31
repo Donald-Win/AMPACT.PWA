@@ -1,13 +1,12 @@
 /**
- * Ducky's AMPACT Selector - v5.3.0
- * Multi-Result Stacked Engine (Vertical Display)
+ * Ducky's AMPACT Selector - v5.4.0
+ * Order-Independent Engine (Size-Based Logic)
  */
 let themedDatabase = {}; 
 let copperDatabase = {}; 
-let tapOptions = new Set();
-let stirrupOptions = new Set();
-let tapSelection = '';
-let stirrupSelection = '';
+let conductorOptions = new Set();
+let selection1 = '';
+let selection2 = '';
 
 const colorThemes = {
     'blue': { body: '#2563eb', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
@@ -28,6 +27,14 @@ function clean(str) {
         .trim();
 }
 
+/**
+ * Extracts diameter from strings like "BUTTERFLY (23.20mm)"
+ */
+function getDiameter(name) {
+    const match = name.match(/\(([\d.]+)\s*mm/);
+    return match ? parseFloat(match[1]) : 0;
+}
+
 async function initApp() {
     setupEventListeners();
     await loadExcelData();
@@ -42,8 +49,7 @@ async function loadExcelData() {
         
         themedDatabase = {};
         copperDatabase = {};
-        tapOptions.clear();
-        stirrupOptions.clear();
+        conductorOptions.clear();
 
         workbook.SheetNames.forEach(sheetName => {
             const lowName = sheetName.toLowerCase();
@@ -67,13 +73,13 @@ async function loadExcelData() {
                     const tap = clean(rowData[0]);
                     if (!tap) continue;
 
-                    tapOptions.add(tap);
+                    conductorOptions.add(tap);
 
                     for (let c = 1; c < headers.length; c++) {
                         const stirrup = headers[c];
-                        if (!stirrup) continue;
+                        if (!stirrup || stirrup.toLowerCase().includes('cable size')) continue;
                         
-                        stirrupOptions.add(stirrup);
+                        conductorOptions.add(stirrup);
                         const val = clean(rowData[c]);
 
                         if (val && val !== "") {
@@ -98,12 +104,25 @@ async function loadExcelData() {
 }
 
 function calculate() {
-    if (!tapSelection || !stirrupSelection) {
+    if (!selection1 || !selection2) {
         displayResult('Ready', 'default');
         return;
     }
 
-    const key = `${tapSelection}|${stirrupSelection}`;
+    // Logic: Larger diameter is the Tap (row), smaller is the Stirrup (column)
+    const dia1 = getDiameter(selection1);
+    const dia2 = getDiameter(selection2);
+
+    let tap, stirrup;
+    if (dia1 >= dia2) {
+        tap = selection1;
+        stirrup = selection2;
+    } else {
+        tap = selection2;
+        stirrup = selection1;
+    }
+
+    const key = `${tap}|${stirrup}`;
     const entry = themedDatabase[key];
 
     if (entry) {
@@ -131,32 +150,32 @@ function calculate() {
     }
 }
 
-function updateDropdowns(tapFilter, stirrupFilter) {
-    const tapSelect = document.getElementById('tap-select');
-    const stirrupSelect = document.getElementById('stirrup-select');
-    const oldTap = tapSelect.value;
-    const oldStirrup = stirrupSelect.value;
+function updateDropdowns(filter1, filter2) {
+    const sel1 = document.getElementById('tap-select');
+    const sel2 = document.getElementById('stirrup-select');
+    const old1 = sel1.value;
+    const old2 = sel2.value;
 
-    tapSelect.innerHTML = '<option value="">Select Tap Conductor...</option>';
-    [...tapOptions].sort().forEach(tap => {
-        if (tap.toLowerCase().includes(tapFilter.toLowerCase())) {
+    const sortedList = [...conductorOptions].sort();
+
+    sel1.innerHTML = '<option value="">Select Conductor 1...</option>';
+    sel2.innerHTML = '<option value="">Select Conductor 2...</option>';
+
+    sortedList.forEach(name => {
+        if (name.toLowerCase().includes(filter1.toLowerCase())) {
             const opt = document.createElement('option');
-            opt.value = opt.textContent = tap;
-            tapSelect.appendChild(opt);
+            opt.value = opt.textContent = name;
+            sel1.appendChild(opt);
+        }
+        if (name.toLowerCase().includes(filter2.toLowerCase())) {
+            const opt = document.createElement('option');
+            opt.value = opt.textContent = name;
+            sel2.appendChild(opt);
         }
     });
 
-    stirrupSelect.innerHTML = '<option value="">Select Stirrup Conductor...</option>';
-    [...stirrupOptions].sort().forEach(stirrup => {
-        if (stirrup.toLowerCase().includes(stirrupFilter.toLowerCase())) {
-            const opt = document.createElement('option');
-            opt.value = opt.textContent = stirrup;
-            stirrupSelect.appendChild(opt);
-        }
-    });
-
-    tapSelect.value = oldTap;
-    stirrupSelect.value = oldStirrup;
+    sel1.value = old1;
+    sel2.value = old2;
 }
 
 function displayResult(text, key) {
@@ -168,20 +187,15 @@ function displayResult(text, key) {
     body.style.backgroundColor = theme.body;
     box.className = `p-8 rounded-2xl border-4 text-center min-h-[160px] flex flex-col items-center justify-center shadow-lg transition-all duration-500 ${theme.bg} ${theme.border}`;
     
-    // Clear previous results
     output.innerHTML = '';
-    
-    // Split text by multiple spaces (which Excel uses for multiple results)
     const parts = text.split(/\s{2,}/).filter(p => p.trim() !== "");
     
     if (parts.length > 1) {
-        // Create vertical stack
         parts.forEach((part, index) => {
             const span = document.createElement('div');
             span.className = `font-black uppercase tracking-tight py-1 ${theme.text} ${parts.length > 3 ? 'text-sm' : 'text-xl'}`;
             span.textContent = part.trim();
             output.appendChild(span);
-            // Add a divider except for the last one
             if (index < parts.length - 1) {
                 const hr = document.createElement('div');
                 hr.className = `w-12 h-0.5 my-1 opacity-30 ${key === 'white' ? 'bg-gray-400' : 'bg-white'}`;
@@ -189,7 +203,6 @@ function displayResult(text, key) {
             }
         });
     } else {
-        // Single result display
         const span = document.createElement('div');
         span.textContent = text;
         if (text.length > 25) span.className = `font-black uppercase ${theme.text} text-xs`;
@@ -200,14 +213,28 @@ function displayResult(text, key) {
 }
 
 function setupEventListeners() {
+    // Note: The HTML IDs remain 'tap' and 'stirrup' for compatibility but labels are changed
     document.getElementById('tap-search').addEventListener('input', e => updateDropdowns(e.target.value, document.getElementById('stirrup-search').value));
     document.getElementById('stirrup-search').addEventListener('input', e => updateDropdowns(document.getElementById('tap-search').value, e.target.value));
-    document.getElementById('tap-select').addEventListener('change', e => { tapSelection = e.target.value; calculate(); });
-    document.getElementById('stirrup-select').addEventListener('change', e => { stirrupSelection = e.target.value; calculate(); });
+    
+    document.getElementById('tap-select').addEventListener('change', e => { 
+        selection1 = e.target.value; 
+        calculate(); 
+    });
+    document.getElementById('stirrup-select').addEventListener('change', e => { 
+        selection2 = e.target.value; 
+        calculate(); 
+    });
+    
     document.getElementById('reset-button').addEventListener('click', () => {
-        tapSelection = ''; stirrupSelection = '';
+        selection1 = ''; selection2 = '';
         document.getElementById('tap-search').value = '';
         document.getElementById('stirrup-search').value = '';
+        
+        // Reset selections manually
+        document.getElementById('tap-select').value = '';
+        document.getElementById('stirrup-select').value = '';
+        
         updateDropdowns('', '');
         displayResult('Ready', 'default');
     });
