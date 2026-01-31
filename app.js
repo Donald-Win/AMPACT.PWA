@@ -1,5 +1,5 @@
 /**
- * AMPACT Selector - v6.1.5
+ * AMPACT Selector - v6.2.0
  * Created and Maintained by Donald Win
  */
 let themedDatabase = {}; 
@@ -7,7 +7,8 @@ let copperDatabase = {};
 let conductorOptions = []; 
 let selection1 = '';
 let selection2 = '';
-const APP_VERSION = "v6.1.5";
+let deferredPrompt = null;
+const APP_VERSION = "v6.2.0";
 
 const colorThemes = {
     'blue': { body: '#2563eb', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
@@ -40,7 +41,7 @@ function cleanCell(val) {
 async function initApp() {
     setupEventListeners();
     const vTag = document.getElementById('version-tag');
-    if (vTag) vTag.textContent = `${APP_VERSION} (STABLE)`;
+    if (vTag) vTag.textContent = `${APP_VERSION} (LIVE LIST)`;
     await loadExcelData();
     setupPWA();
 }
@@ -75,7 +76,6 @@ async function loadExcelData() {
                 const rawTap = cleanCell(rowData[0]);
                 if (!rawTap || rawTap.toLowerCase().includes('cable size')) continue;
 
-                // Normalize key for deduplication
                 const nTap = normalize(rawTap);
                 if (!rawOptionsMap.has(nTap)) rawOptionsMap.set(nTap, rawTap);
 
@@ -100,7 +100,10 @@ async function loadExcelData() {
         });
 
         conductorOptions = Array.from(rawOptionsMap.values()).sort();
-        updateDropdowns();
+        // Initial populate (hidden)
+        updateList('tap', '');
+        updateList('stirrup', '');
+        
         displayResult('Ready', 'default', false);
     } catch (e) {
         console.error("Load Error:", e);
@@ -119,13 +122,11 @@ function calculate() {
     const d1 = getDiameter(selection1);
     const d2 = getDiameter(selection2);
 
-    // Primary search order based on diameter
     const pairs = d1 >= d2 ? [`${n1}|${n2}`, `${n2}|${n1}`] : [`${n2}|${n1}`, `${n1}|${n2}`];
 
     let val = "";
     let theme = "";
 
-    // 1. Check Themed Database
     for (let key of pairs) {
         const entry = themedDatabase[key];
         if (entry) {
@@ -135,10 +136,8 @@ function calculate() {
         }
     }
 
-    // 2. Copper Redirection Logic
     const isCopRef = val.toLowerCase().includes("copper") || val.toLowerCase().includes("refer");
     
-    // If it's a redirect OR if no match found yet, check Copper DB
     if (isCopRef || !val) {
         for (let key of pairs) {
             if (copperDatabase[key]) {
@@ -156,36 +155,46 @@ function calculate() {
     }
 }
 
-function updateDropdowns() {
-    const f1 = document.getElementById('tap-search').value.toLowerCase();
-    const f2 = document.getElementById('stirrup-search').value.toLowerCase();
-    const s1 = document.getElementById('tap-select');
-    const s2 = document.getElementById('stirrup-select');
+// Replaces updateDropdowns. Manages the custom list UI.
+function updateList(type, filter) {
+    const listEl = document.getElementById(`${type}-list`);
+    const inputEl = document.getElementById(`${type}-search`);
     
-    // Preserve selection if possible
-    const v1 = s1.value;
-    const v2 = s2.value;
+    if (!listEl) return;
 
-    s1.innerHTML = '<option value="">Select Conductor...</option>';
-    s2.innerHTML = '<option value="">Select Conductor...</option>';
+    listEl.innerHTML = '';
+    
+    // If no filter and not focused, hide list (optional, but requested behavior implies always show matches)
+    // Actually request is "box below should expand".
+    
+    const f = filter.toLowerCase();
+    const matches = conductorOptions.filter(name => name.toLowerCase().includes(f));
 
-    conductorOptions.forEach(name => {
-        const n = name.toLowerCase();
-        if (n.includes(f1)) {
-            const o = document.createElement('option');
-            o.value = o.textContent = name;
-            s1.appendChild(o);
-        }
-        if (n.includes(f2)) {
-            const o = document.createElement('option');
-            o.value = o.textContent = name;
-            s2.appendChild(o);
-        }
+    if (matches.length === 0) {
+        listEl.classList.add('hidden');
+        return;
+    }
+
+    matches.forEach(name => {
+        const div = document.createElement('div');
+        div.className = "p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 text-gray-800 font-bold text-sm";
+        div.textContent = name;
+        div.onclick = () => {
+            inputEl.value = name;
+            if (type === 'tap') selection1 = name;
+            else selection2 = name;
+            
+            listEl.classList.add('hidden'); // Hide after selection
+            calculate();
+        };
+        listEl.appendChild(div);
     });
 
-    // Restore previous selection if it exists in the filtered list
-    s1.value = v1;
-    s2.value = v2;
+    if (filter) {
+        listEl.classList.remove('hidden');
+    } else {
+        listEl.classList.add('hidden'); // Hide if empty? User said "expand to show all options that contain na"
+    }
 }
 
 function displayResult(text, key, shouldFlash) {
@@ -196,9 +205,10 @@ function displayResult(text, key, shouldFlash) {
     
     body.style.backgroundColor = theme.body;
     
+    // Force reflow for animation
     box.classList.remove('flash-success');
     if (shouldFlash) {
-        void box.offsetWidth; // Trigger reflow
+        void box.offsetWidth; 
         box.classList.add('flash-success');
     }
 
@@ -232,39 +242,57 @@ function displayResult(text, key, shouldFlash) {
 }
 
 function setupEventListeners() {
-    document.getElementById('tap-search').addEventListener('input', updateDropdowns);
-    document.getElementById('stirrup-search').addEventListener('input', updateDropdowns);
+    const tInput = document.getElementById('tap-search');
+    const sInput = document.getElementById('stirrup-search');
+    
+    tInput.addEventListener('input', (e) => updateList('tap', e.target.value));
+    sInput.addEventListener('input', (e) => updateList('stirrup', e.target.value));
+    
+    // Show list on focus if there's text, or show all? 
+    // "show all options that contain na" -> implies filtering.
+    // "tap one straight away" -> Custom list.
+    
+    tInput.addEventListener('focus', (e) => {
+        if(e.target.value) updateList('tap', e.target.value);
+    });
+    sInput.addEventListener('focus', (e) => {
+        if(e.target.value) updateList('stirrup', e.target.value);
+    });
 
-    document.getElementById('tap-select').addEventListener('change', (e) => { selection1 = e.target.value; calculate(); });
-    document.getElementById('stirrup-select').addEventListener('change', (e) => { selection2 = e.target.value; calculate(); });
+    // Close lists when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#tap-container')) document.getElementById('tap-list').classList.add('hidden');
+        if (!e.target.closest('#stirrup-container')) document.getElementById('stirrup-list').classList.add('hidden');
+    });
 
     document.getElementById('reset-button').addEventListener('click', () => {
         selection1 = ''; selection2 = '';
-        document.getElementById('tap-search').value = '';
-        document.getElementById('stirrup-search').value = '';
-        updateDropdowns();
+        tInput.value = ''; sInput.value = '';
+        document.getElementById('tap-list').classList.add('hidden');
+        document.getElementById('stirrup-list').classList.add('hidden');
         displayResult('Ready', 'default', false);
     });
 }
 
 function setupPWA() {
-    let deferredPrompt;
     const installBtn = document.getElementById('install-btn');
     
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
-        installBtn.classList.remove('hidden');
+        if(installBtn) installBtn.classList.remove('hidden');
     });
 
-    installBtn.addEventListener('click', async () => {
-        if (deferredPrompt) {
-            deferredPrompt.prompt();
-            const { outcome } = await deferredPrompt.userChoice;
-            if (outcome === 'accepted') installBtn.classList.add('hidden');
-            deferredPrompt = null;
-        } else {
-            alert("To install: Tap browser menu and select 'Add to Home Screen'");
-        }
-    });
+    if(installBtn) {
+        installBtn.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') installBtn.classList.add('hidden');
+                deferredPrompt = null;
+            } else {
+                alert("To install: Tap browser menu and select 'Add to Home Screen'");
+            }
+        });
+    }
 }
