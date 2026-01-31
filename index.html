@@ -37,7 +37,7 @@
                 <div id="tap-container" class="relative">
                     <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Conductor 1</label>
                     <input type="text" id="tap-search" placeholder="Search..." autocomplete="off"
-                        class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl outline-none text-sm font-medium focus:border-blue-500 focus:bg-white transition-all">
+                        class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl outline-none text-sm font-medium focus:border-blue-500 focus:bg-white transition-all cursor-pointer">
                     <!-- Absolute positioned list -->
                     <div id="tap-list" class="hidden absolute top-full left-0 right-0 mt-1 bg-white border-2 border-gray-100 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto custom-list"></div>
                 </div>
@@ -46,7 +46,7 @@
                 <div id="stirrup-container" class="relative">
                     <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Conductor 2</label>
                     <input type="text" id="stirrup-search" placeholder="Search..." autocomplete="off"
-                        class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl outline-none text-sm font-medium focus:border-blue-500 focus:bg-white transition-all">
+                        class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl outline-none text-sm font-medium focus:border-blue-500 focus:bg-white transition-all cursor-pointer">
                     <!-- Absolute positioned list -->
                     <div id="stirrup-list" class="hidden absolute top-full left-0 right-0 mt-1 bg-white border-2 border-gray-100 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto custom-list"></div>
                 </div>
@@ -65,11 +65,17 @@
     </div>
 
     <div class="w-full max-w-md mt-6 space-y-3">
-        <!-- Install Button (Hidden by default) -->
-        <button id="install-btn" class="hidden w-full bg-emerald-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-transform">
+        <!-- Install Button (Hidden by default, shown via JS) -->
+        <button id="install-btn" class="hidden w-full bg-emerald-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-transform hover:bg-emerald-700">
             Install App
         </button>
         
+        <!-- iOS Instructions (Hidden by default) -->
+        <div id="ios-install-instructions" class="hidden bg-white/90 backdrop-blur rounded-2xl p-4 text-center border border-gray-200 shadow-lg">
+             <p class="text-gray-600 text-xs font-bold uppercase tracking-wide">Install on iOS</p>
+             <p class="text-gray-500 text-sm mt-1">Tap <span class="font-bold text-blue-500">Share</span> then <span class="font-bold text-gray-700">Add to Home Screen</span></p>
+        </div>
+
         <footer class="bg-black/80 backdrop-blur-md rounded-2xl p-4 text-center border border-white/10 shadow-lg">
             <a href="https://github.com/donald-win/AMPACT.PWA" target="_blank" class="text-white hover:text-blue-400 text-[10px] font-bold uppercase tracking-widest transition-colors block mb-1">
                 GitHub: AMPACT.PWA
