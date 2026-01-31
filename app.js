@@ -1,21 +1,12 @@
 /**
- * Ducky's AMPACT Selector - v4.5.0
- * Robust Multi-tab Excel Engine with Style Detection
+ * Ducky's AMPACT Selector - v4.7.0
+ * Multi-Tab Cross-Reference Engine (Color by Tab Source)
  */
 let spreadsheetData = [];
+let tabSourceMap = {}; // Maps "Tap|Stirrup" to a specific color theme
 let tapSelection = '';
 let stirrupSelection = '';
 let conductorHeaderName = "";
-let deferredPrompt = null;
-
-const colorMap = {
-    'FFFF00': 'yellow', 'FFFFFF00': 'yellow',
-    'FFFF0000': 'red', 'FF0000FF': 'blue',
-    'FF00B0F0': 'blue', 'FF0070C0': 'blue',
-    'FFED7D31': 'copper', 'FFC00000': 'red',
-    'FFFFFFFF': 'white', 'theme-4': 'blue',
-    'theme-5': 'red', 'theme-6': 'yellow', 'theme-8': 'copper'
-};
 
 const colorThemes = {
     'blue': { body: '#2563eb', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
@@ -30,10 +21,7 @@ document.addEventListener('DOMContentLoaded', initApp);
 
 function clean(str) {
     if (str === undefined || str === null) return "";
-    return str.toString()
-        .replace(/\r?\n|\r/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+    return str.toString().replace(/\r?\n|\r/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 async function initApp() {
@@ -46,83 +34,63 @@ async function loadExcelData() {
         const response = await fetch(`data.xlsx?t=${Date.now()}`);
         if (!response.ok) throw new Error("data.xlsx not found");
         const arrayBuffer = await response.arrayBuffer();
-        const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellStyles: true });
+        const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
         
-        // Find the Cross-Reference sheet
-        const sheetName = workbook.SheetNames.find(n => n.includes('Main') || n.includes('x-ref')) || workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const range = XLSX.utils.decode_range(sheet['!ref']);
-        
-        const headers = [];
-        for (let C = range.s.c; C <= range.e.c; ++C) {
-            const cell = sheet[XLSX.utils.encode_cell({ r: range.s.r, c: C })];
-            headers.push(clean(cell ? cell.v : `Col${C}`));
-        }
-        conductorHeaderName = headers[0];
+        // 1. Build the Tab Source Map (Scanning themed tabs)
+        workbook.SheetNames.forEach(sheetName => {
+            const lowName = sheetName.toLowerCase();
+            let theme = '';
+            if (lowName.includes('yellow')) theme = 'yellow';
+            else if (lowName.includes('blue')) theme = 'blue';
+            else if (lowName.includes('red')) theme = 'red';
+            else if (lowName.includes('white')) theme = 'white';
+            else if (lowName.includes('copper')) theme = 'copper';
 
-        const rows = [];
-        for (let R = range.s.r + 1; R <= range.e.r; ++R) {
-            const rowData = { _styles: {} };
-            let hasContent = false;
-            for (let C = range.s.c; C <= range.e.c; ++C) {
-                const addr = XLSX.utils.encode_cell({ r: R, c: C });
-                const cell = sheet[addr];
-                const head = headers[C];
-                const val = clean(cell ? cell.v : "");
-                rowData[head] = val;
-                if (val) hasContent = true;
-                if (cell?.s?.fill?.fgColor) {
-                    const fg = cell.s.fill.fgColor;
-                    rowData._styles[head] = fg.rgb || (fg.theme !== undefined ? `theme-${fg.theme}` : null);
+            if (theme) {
+                const sheet = workbook.Sheets[sheetName];
+                const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                const headers = json[0] ? json[0].map(h => clean(h)) : [];
+                
+                for (let r = 1; r < json.length; r++) {
+                    const row = json[r];
+                    const tap = clean(row[0]);
+                    if (!tap) continue;
+                    
+                    for (let c = 1; c < headers.length; c++) {
+                        const stirrup = headers[c];
+                        const val = clean(row[c]);
+                        if (val && val !== "Refer Copper Chart") {
+                            // Map this specific Tap/Stirrup combo to the tab's color
+                            tabSourceMap[`${tap}|${stirrup}`] = theme;
+                        }
+                    }
                 }
             }
-            if (hasContent) rows.push(rowData);
+        });
+
+        // 2. Load the Master List (Main AMPACT x-ref chart) for the UI
+        const mainSheetName = workbook.SheetNames.find(n => n.includes('Main') || n.includes('x-ref')) || workbook.SheetNames[0];
+        const mainSheet = workbook.Sheets[mainSheetName];
+        const mainData = XLSX.utils.sheet_to_json(mainSheet, { header: 1 });
+        
+        const headers = mainData[0].map(h => clean(h));
+        conductorHeaderName = headers[0];
+
+        spreadsheetData = [];
+        for (let r = 1; r < mainData.length; r++) {
+            const row = mainData[r];
+            const rowObj = {};
+            headers.forEach((h, i) => { rowObj[h] = clean(row[i]); });
+            if (rowObj[conductorHeaderName]) spreadsheetData.push(rowObj);
         }
-        spreadsheetData = rows;
-        updateDropdowns();
+
+        updateTapOptions('');
+        updateStirrupOptions('');
+        displayResult('Ready', 'default');
     } catch (e) {
-        console.error(e);
+        console.error("Excel Load Error:", e);
         displayResult('Load Error', 'default');
     }
-}
-
-function updateDropdowns() {
-    updateTapOptions('');
-    updateStirrupOptions('');
-}
-
-function updateTapOptions(filter) {
-    const select = document.getElementById('tap-select');
-    const val = select.value;
-    select.innerHTML = '<option value="">Select Tap Conductor...</option>';
-    spreadsheetData.forEach(row => {
-        const name = row[conductorHeaderName];
-        if (name && name.toLowerCase().includes(filter.toLowerCase())) {
-            const opt = document.createElement('option');
-            opt.value = name;
-            opt.textContent = name;
-            select.appendChild(opt);
-        }
-    });
-    if (Array.from(select.options).some(o => o.value === val)) select.value = val;
-}
-
-function updateStirrupOptions(filter) {
-    const select = document.getElementById('stirrup-select');
-    const val = select.value;
-    select.innerHTML = '<option value="">Select Stirrup Conductor...</option>';
-    if (spreadsheetData.length > 0) {
-        const heads = Object.keys(spreadsheetData[0]).filter(k => k !== '_styles' && k !== conductorHeaderName);
-        heads.forEach(h => {
-            if (h.toLowerCase().includes(filter.toLowerCase())) {
-                const opt = document.createElement('option');
-                opt.value = h;
-                opt.textContent = h;
-                select.appendChild(opt);
-            }
-        });
-    }
-    if (Array.from(select.options).some(o => o.value === val)) select.value = val;
 }
 
 function calculate() {
@@ -130,28 +98,51 @@ function calculate() {
         displayResult('Ready', 'default');
         return;
     }
+
     const row = spreadsheetData.find(r => r[conductorHeaderName] === tapSelection);
-    if (!row) return displayResult('No Match', 'default');
+    const result = row ? row[stirrupSelection] : null;
 
-    const result = row[stirrupSelection];
-    const style = row._styles[stirrupSelection];
-
-    if (result) {
-        let theme = 'default';
-        if (style && colorMap[style]) theme = colorMap[style];
-        else {
-            const low = result.toLowerCase();
-            if (low.includes('blue')) theme = 'blue';
-            else if (low.includes('yellow')) theme = 'yellow';
-            else if (low.includes('red')) theme = 'red';
-            else if (low.includes('white')) theme = 'white';
-            else if (low.includes('copper')) theme = 'copper';
-        }
-        const text = result.replace(/\b(blue|yellow|white|red|copper)\b/gi, '').trim();
-        displayResult(text || result, theme);
+    if (result && result !== "Refer Copper Chart") {
+        // Look up the theme based on which tab contains this specific combo
+        const theme = tabSourceMap[`${tapSelection}|${stirrupSelection}`] || 'default';
+        displayResult(result, theme);
+    } else if (result === "Refer Copper Chart") {
+        displayResult("Check Copper Chart", 'copper');
     } else {
         displayResult('No Match', 'default');
     }
+}
+
+function updateTapOptions(filter) {
+    const select = document.getElementById('tap-select');
+    const prev = select.value;
+    select.innerHTML = '<option value="">Select Tap Conductor...</option>';
+    spreadsheetData.forEach(row => {
+        const name = row[conductorHeaderName];
+        if (name && name.toLowerCase().includes(filter.toLowerCase())) {
+            const opt = document.createElement('option');
+            opt.value = name; opt.textContent = name;
+            select.appendChild(opt);
+        }
+    });
+    if (prev) select.value = prev;
+}
+
+function updateStirrupOptions(filter) {
+    const select = document.getElementById('stirrup-select');
+    const prev = select.value;
+    select.innerHTML = '<option value="">Select Stirrup Conductor...</option>';
+    if (spreadsheetData.length > 0) {
+        const heads = Object.keys(spreadsheetData[0]).filter(k => k !== conductorHeaderName);
+        heads.forEach(h => {
+            if (h.toLowerCase().includes(filter.toLowerCase())) {
+                const opt = document.createElement('option');
+                opt.value = h; opt.textContent = h;
+                select.appendChild(opt);
+            }
+        });
+    }
+    if (prev) select.value = prev;
 }
 
 function displayResult(text, key) {
@@ -159,9 +150,10 @@ function displayResult(text, key) {
     const box = document.getElementById('output-box');
     const body = document.getElementById('body-bg');
     const theme = colorThemes[key] || colorThemes.default;
+    
     body.style.backgroundColor = theme.body;
     box.className = `p-8 rounded-2xl border-4 text-center min-h-[140px] flex flex-col items-center justify-center shadow-lg transition-all duration-500 ${theme.bg} ${theme.border}`;
-    output.className = `font-black uppercase text-center ${theme.text} ${text.length > 12 ? 'text-xl' : 'text-3xl'}`;
+    output.className = `font-black uppercase text-center ${theme.text} ${text.length > 15 ? 'text-lg' : 'text-3xl'}`;
     output.textContent = text;
 }
 
@@ -174,7 +166,7 @@ function setupEventListeners() {
         tapSelection = ''; stirrupSelection = '';
         document.getElementById('tap-search').value = '';
         document.getElementById('stirrup-search').value = '';
-        updateDropdowns();
+        updateTapOptions(''); updateStirrupOptions('');
         displayResult('Ready', 'default');
     });
 }
