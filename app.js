@@ -52,8 +52,8 @@ async function initApp() {
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </div>
-                        <h1 class="text-2xl font-black mb-2 tracking-tighter uppercase">Maintenance Required</h1>
-                        <p class="text-gray-400 text-sm max-w-xs leading-relaxed">This application has been temporarily disabled. Please check for updates or contact the administrator.</p>
+                        <h1 class="text-2xl font-black mb-2 tracking-tighter uppercase">APP DISABLED</h1>
+                        <p class="text-gray-400 text-sm max-w-xs leading-relaxed">I guess someone pissed off Ducky. Must be time for some sucking up.</p>
                         <div class="mt-8 text-[10px] font-bold text-gray-600 uppercase tracking-widest">${APP_VERSION}</div>
                     </div>`;
                 return;
