@@ -1,5 +1,5 @@
 /**
- * AMPACT Selector - v6.0.0
+ * AMPACT Selector - v6.0.2
  * Created and Maintained by Donald Win
  */
 let themedDatabase = {}; 
@@ -7,7 +7,7 @@ let copperDatabase = {};
 let conductorOptions = []; 
 let selection1 = '';
 let selection2 = '';
-const APP_VERSION = "v6.0.0";
+const APP_VERSION = "v6.0.2";
 
 const colorThemes = {
     'blue': { body: '#2563eb', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
@@ -27,15 +27,14 @@ function normalize(str) {
 
 function cleanCell(val) {
     if (val === undefined || val === null) return "";
-    // Handle objects if Excel parser returns them
     if (typeof val === 'object') return "";
     return val.toString().trim();
 }
 
 async function initApp() {
     setupEventListeners();
-    const versionEl = document.getElementById('version-tag');
-    if (versionEl) versionEl.textContent = `${APP_VERSION} (COPPER-CROSS ENGINE)`;
+    const vTag = document.getElementById('version-tag');
+    if (vTag) vTag.textContent = `${APP_VERSION} (ULTIMATE)`;
     await loadExcelData();
 }
 
@@ -48,7 +47,7 @@ async function loadExcelData() {
         
         themedDatabase = {};
         copperDatabase = {};
-        let rawOptionsMap = new Map(); // Store display name by its normalized key to prevent duplicates
+        let rawOptionsMap = new Map();
 
         workbook.SheetNames.forEach(sheetName => {
             const lowName = sheetName.toLowerCase();
@@ -71,20 +70,19 @@ async function loadExcelData() {
                 const rawTap = cleanCell(rowData[0]);
                 if (!rawTap || rawTap.toLowerCase().includes('cable size')) continue;
 
-                // Deduplicate for dropdowns
-                const normTap = normalize(rawTap);
-                if (!rawOptionsMap.has(normTap)) rawOptionsMap.set(normTap, rawTap);
+                const nTap = normalize(rawTap);
+                if (!rawOptionsMap.has(nTap)) rawOptionsMap.set(nTap, rawTap);
 
                 for (let c = 1; c < headers.length; c++) {
                     const rawStirrup = headers[c];
                     if (!rawStirrup || rawStirrup.toLowerCase().includes('cable size')) continue;
                     
-                    const normStirrup = normalize(rawStirrup);
-                    if (!rawOptionsMap.has(normStirrup)) rawOptionsMap.set(normStirrup, rawStirrup);
+                    const nStirrup = normalize(rawStirrup);
+                    if (!rawOptionsMap.has(nStirrup)) rawOptionsMap.set(nStirrup, rawStirrup);
 
                     const val = cleanCell(rowData[c]);
                     if (val && val !== "") {
-                        const key = `${normTap}|${normStirrup}`;
+                        const key = `${nTap}|${nStirrup}`;
                         if (isCopperSheet) {
                             copperDatabase[key] = val;
                         } else {
@@ -96,10 +94,9 @@ async function loadExcelData() {
         });
 
         conductorOptions = Array.from(rawOptionsMap.values()).sort();
-        updateDropdowns('', '');
+        updateDropdowns();
         displayResult('Ready', 'default', false);
     } catch (e) {
-        console.error("Load Error:", e);
         displayResult('EXCEL ERROR', 'default', false);
     }
 }
@@ -114,65 +111,64 @@ function calculate() {
     const n2 = normalize(selection2);
     const pairs = [`${n1}|${n2}`, `${n2}|${n1}`];
 
-    let finalValue = "";
-    let finalTheme = "";
+    let val = "";
+    let theme = "";
 
-    // 1. Check Themed Database first
     for (let key of pairs) {
         const entry = themedDatabase[key];
         if (entry) {
-            finalValue = entry.value;
-            finalTheme = entry.theme;
+            val = entry.value;
+            theme = entry.theme;
             break;
         }
     }
 
-    // 2. Logic Overhaul: If result says "Copper" OR no themed match, force Copper lookup
-    const isCopperRef = finalValue.toLowerCase().includes("copper") || finalValue.toLowerCase().includes("refer");
-    
-    if (isCopperRef || !finalValue) {
+    const isCopRef = val.toLowerCase().includes("copper") || val.toLowerCase().includes("refer");
+    if (isCopRef || !val) {
         for (let key of pairs) {
             if (copperDatabase[key]) {
-                finalValue = copperDatabase[key];
-                finalTheme = 'copper';
+                val = copperDatabase[key];
+                theme = 'copper';
                 break;
             }
         }
     }
 
-    if (finalValue) {
-        displayResult(finalValue, finalTheme, true);
+    if (val) {
+        displayResult(val, theme, true);
     } else {
         displayResult('No Match', 'default', false);
     }
 }
 
-function updateDropdowns(f1, f2) {
-    const sel1 = document.getElementById('tap-select');
-    const sel2 = document.getElementById('stirrup-select');
+function updateDropdowns() {
+    const f1 = document.getElementById('tap-search').value.toLowerCase();
+    const f2 = document.getElementById('stirrup-search').value.toLowerCase();
+    const s1 = document.getElementById('tap-select');
+    const s2 = document.getElementById('stirrup-select');
     
-    const val1 = sel1.value;
-    const val2 = sel2.value;
+    const v1 = s1.value;
+    const v2 = s2.value;
 
-    sel1.innerHTML = '<option value="">Select Conductor...</option>';
-    sel2.innerHTML = '<option value="">Select Conductor...</option>';
+    s1.innerHTML = '<option value="">Select Conductor...</option>';
+    s2.innerHTML = '<option value="">Select Conductor...</option>';
 
     conductorOptions.forEach(name => {
-        const low = name.toLowerCase();
-        if (!f1 || low.includes(f1.toLowerCase())) {
-            const opt = document.createElement('option');
-            opt.value = opt.textContent = name;
-            sel1.appendChild(opt);
+        const n = name.toLowerCase();
+        if (n.includes(f1)) {
+            const o = document.createElement('option');
+            o.value = o.textContent = name;
+            s1.appendChild(o);
         }
-        if (!f2 || low.includes(f2.toLowerCase())) {
-            const opt = document.createElement('option');
-            opt.value = opt.textContent = name;
-            sel2.appendChild(opt);
+        if (n.includes(f2)) {
+            const o = document.createElement('option');
+            o.value = o.textContent = name;
+            s2.appendChild(o);
         }
     });
 
-    sel1.value = val1;
-    sel2.value = val2;
+    s1.value = v1;
+    s2.value = v2;
 }
 
 function displayResult(text, key, shouldFlash) {
@@ -192,7 +188,6 @@ function displayResult(text, key, shouldFlash) {
     box.className = `p-4 rounded-3xl border-4 text-center min-h-[180px] w-full flex flex-col items-center justify-center shadow-lg transition-all duration-500 ${theme.bg} ${theme.border}`;
     
     let displayStr = text;
-    // Aggressive Copper text removal for clean UI
     if (key === 'copper') {
         displayStr = text.replace(/copper|cu|see|sheet|chart|refer/gi, '').trim();
         if (!displayStr) displayStr = "CHECK CHART";
@@ -202,40 +197,35 @@ function displayResult(text, key, shouldFlash) {
     const parts = displayStr.split(/\s+/).filter(p => p.trim() !== "");
     
     if (parts.length > 1 && !displayStr.toLowerCase().includes("ready")) {
-        const container = document.createElement('div');
-        container.className = "flex flex-col gap-1 w-full items-center";
+        const cont = document.createElement('div');
+        cont.className = "flex flex-col gap-1 w-full items-center";
         parts.forEach(p => {
-            const div = document.createElement('div');
-            div.className = `font-black uppercase tracking-tight ${theme.text} ${parts.length > 3 ? 'text-xl' : 'text-3xl'}`;
-            div.textContent = p;
-            container.appendChild(div);
+            const d = document.createElement('div');
+            d.className = `font-black uppercase tracking-tight ${theme.text} ${parts.length > 3 ? 'text-xl' : 'text-3xl'}`;
+            d.textContent = p;
+            cont.appendChild(d);
         });
-        output.appendChild(container);
+        output.appendChild(cont);
     } else {
-        const div = document.createElement('div');
-        div.className = `font-black uppercase ${theme.text} ${displayStr.length > 15 ? 'text-xl' : 'text-4xl'}`;
-        div.textContent = displayStr;
-        output.appendChild(div);
+        const d = document.createElement('div');
+        d.className = `font-black uppercase ${theme.text} ${displayStr.length > 15 ? 'text-xl' : 'text-4xl'}`;
+        d.textContent = displayStr;
+        output.appendChild(d);
     }
 }
 
 function setupEventListeners() {
-    const ts = document.getElementById('tap-search');
-    const ss = document.getElementById('stirrup-search');
-    const tsel = document.getElementById('tap-select');
-    const ssel = document.getElementById('stirrup-select');
+    document.getElementById('tap-search').addEventListener('input', updateDropdowns);
+    document.getElementById('stirrup-search').addEventListener('input', updateDropdowns);
 
-    ts.addEventListener('input', () => updateDropdowns(ts.value, ss.value));
-    ss.addEventListener('input', () => updateDropdowns(ts.value, ss.value));
-
-    tsel.addEventListener('change', (e) => { selection1 = e.target.value; calculate(); });
-    ssel.addEventListener('change', (e) => { selection2 = e.target.value; calculate(); });
+    document.getElementById('tap-select').addEventListener('change', (e) => { selection1 = e.target.value; calculate(); });
+    document.getElementById('stirrup-select').addEventListener('change', (e) => { selection2 = e.target.value; calculate(); });
 
     document.getElementById('reset-button').addEventListener('click', () => {
         selection1 = ''; selection2 = '';
-        ts.value = ''; ss.value = '';
-        tsel.value = ''; ssel.value = '';
-        updateDropdowns('', '');
+        document.getElementById('tap-search').value = '';
+        document.getElementById('stirrup-search').value = '';
+        updateDropdowns();
         displayResult('Ready', 'default', false);
     });
 }
