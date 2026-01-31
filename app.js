@@ -352,5 +352,3 @@ function setupPWA() {
 </body>
 </html>
 ```eof
-
-Would you like me to adjust the size or position of the clear buttons?
