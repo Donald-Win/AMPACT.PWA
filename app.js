@@ -1,6 +1,6 @@
 /**
- * Ducky's AMPACT Selector - v5.4.0
- * Order-Independent Engine (Size-Based Logic)
+ * Ducky's AMPACT Selector - v5.6.0
+ * Order-Independent + Fuzzy Copper Lookup
  */
 let themedDatabase = {}; 
 let copperDatabase = {}; 
@@ -19,6 +19,17 @@ const colorThemes = {
 
 document.addEventListener('DOMContentLoaded', initApp);
 
+/**
+ * Standardizes conductor names for lookups (removes extra spaces/formatting)
+ */
+function normalize(str) {
+    if (!str) return "";
+    return str.toString().toLowerCase()
+        .replace(/\s+/g, ' ')
+        .replace(/[^\w\d().]/g, '') // Strips symbols to prevent matching errors
+        .trim();
+}
+
 function clean(str) {
     if (str === undefined || str === null) return "";
     return str.toString()
@@ -27,10 +38,8 @@ function clean(str) {
         .trim();
 }
 
-/**
- * Extracts diameter from strings like "BUTTERFLY (23.20mm)"
- */
 function getDiameter(name) {
+    if (!name) return 0;
     const match = name.match(/\(([\d.]+)\s*mm/);
     return match ? parseFloat(match[1]) : 0;
 }
@@ -70,24 +79,25 @@ async function loadExcelData() {
             if (theme) {
                 for (let r = 1; r < rows.length; r++) {
                     const rowData = rows[r];
-                    const tap = clean(rowData[0]);
-                    if (!tap) continue;
+                    const rawTap = clean(rowData[0]);
+                    if (!rawTap || rawTap.toLowerCase().includes('cable size')) continue;
 
-                    conductorOptions.add(tap);
+                    conductorOptions.add(rawTap);
 
                     for (let c = 1; c < headers.length; c++) {
-                        const stirrup = headers[c];
-                        if (!stirrup || stirrup.toLowerCase().includes('cable size')) continue;
+                        const rawStirrup = headers[c];
+                        if (!rawStirrup || rawStirrup.toLowerCase().includes('cable size')) continue;
                         
-                        conductorOptions.add(stirrup);
+                        conductorOptions.add(rawStirrup);
                         const val = clean(rowData[c]);
 
                         if (val && val !== "") {
-                            const key = `${tap}|${stirrup}`;
+                            // We use normalized keys for internal logic, raw keys for display
+                            const key = `${normalize(rawTap)}|${normalize(rawStirrup)}`;
                             if (isCopperSheet) {
                                 copperDatabase[key] = val;
                             } else {
-                                themedDatabase[key] = { value: val, theme: theme };
+                                themedDatabase[key] = { value: val, theme: theme, rawKey: `${rawTap}|${rawStirrup}` };
                             }
                         }
                     }
@@ -109,39 +119,50 @@ function calculate() {
         return;
     }
 
-    // Logic: Larger diameter is the Tap (row), smaller is the Stirrup (column)
     const dia1 = getDiameter(selection1);
     const dia2 = getDiameter(selection2);
 
-    let tap, stirrup;
+    // Swap logic: Internal lookup uses normalized strings
+    let tNorm, sNorm;
     if (dia1 >= dia2) {
-        tap = selection1;
-        stirrup = selection2;
+        tNorm = normalize(selection1);
+        sNorm = normalize(selection2);
     } else {
-        tap = selection2;
-        stirrup = selection1;
+        tNorm = normalize(selection2);
+        sNorm = normalize(selection1);
     }
 
-    const key = `${tap}|${stirrup}`;
+    const key = `${tNorm}|${sNorm}`;
     const entry = themedDatabase[key];
 
     if (entry) {
         let text = entry.value;
         let theme = entry.theme;
 
-        if (text.toLowerCase().includes("refer copper")) {
+        // Perform Copper Lookup if indicated
+        if (text.toLowerCase().includes("refer copper") || text.toLowerCase().includes("check copper")) {
             const copperVal = copperDatabase[key];
             if (copperVal) {
                 text = copperVal;
                 theme = 'copper';
             } else {
-                text = "See Copper Chart";
-                theme = 'copper';
+                // If it points to copper but we can't find the exact match, 
+                // search for the reverse order in copper just in case
+                const reverseKey = `${sNorm}|${tNorm}`;
+                const revCopperVal = copperDatabase[reverseKey];
+                if (revCopperVal) {
+                    text = revCopperVal;
+                    theme = 'copper';
+                } else {
+                    text = "Refer Copper Sheet";
+                    theme = 'copper';
+                }
             }
         }
         displayResult(text, theme);
     } else {
-        const copperOnly = copperDatabase[key];
+        // Fallback for items that exist ONLY in the copper sheet
+        const copperOnly = copperDatabase[key] || copperDatabase[`${sNorm}|${tNorm}`];
         if (copperOnly) {
             displayResult(copperOnly, 'copper');
         } else {
@@ -207,13 +228,13 @@ function displayResult(text, key) {
         span.textContent = text;
         if (text.length > 25) span.className = `font-black uppercase ${theme.text} text-xs`;
         else if (text.length > 18) span.className = `font-black uppercase ${theme.text} text-base`;
+        else if (text.length > 12) span.className = `font-black uppercase ${theme.text} text-xl`;
         else span.className = `font-black uppercase ${theme.text} text-3xl`;
         output.appendChild(span);
     }
 }
 
 function setupEventListeners() {
-    // Note: The HTML IDs remain 'tap' and 'stirrup' for compatibility but labels are changed
     document.getElementById('tap-search').addEventListener('input', e => updateDropdowns(e.target.value, document.getElementById('stirrup-search').value));
     document.getElementById('stirrup-search').addEventListener('input', e => updateDropdowns(document.getElementById('tap-search').value, e.target.value));
     
@@ -230,11 +251,8 @@ function setupEventListeners() {
         selection1 = ''; selection2 = '';
         document.getElementById('tap-search').value = '';
         document.getElementById('stirrup-search').value = '';
-        
-        // Reset selections manually
         document.getElementById('tap-select').value = '';
         document.getElementById('stirrup-select').value = '';
-        
         updateDropdowns('', '');
         displayResult('Ready', 'default');
     });
