@@ -1,5 +1,5 @@
 /**
- * AMPACT Selector - v6.2.0
+ * AMPACT Selector - v6.3.0
  * Created and Maintained by Donald Win
  */
 let themedDatabase = {}; 
@@ -8,7 +8,7 @@ let conductorOptions = [];
 let selection1 = '';
 let selection2 = '';
 let deferredPrompt = null;
-const APP_VERSION = "v6.2.0";
+const APP_VERSION = "v6.3.0";
 
 const colorThemes = {
     'blue': { body: '#2563eb', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-800' },
@@ -41,7 +41,7 @@ function cleanCell(val) {
 async function initApp() {
     setupEventListeners();
     const vTag = document.getElementById('version-tag');
-    if (vTag) vTag.textContent = `${APP_VERSION} (LIVE LIST)`;
+    if (vTag) vTag.textContent = `${APP_VERSION} (ULTIMATE)`;
     await loadExcelData();
     setupPWA();
 }
@@ -54,7 +54,9 @@ async function loadExcelData() {
         const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
         
         let rawOptionsMap = new Map();
-        
+        themedDatabase = {};
+        copperDatabase = {};
+
         workbook.SheetNames.forEach(sheetName => {
             const lowName = sheetName.toLowerCase();
             const sheet = workbook.Sheets[sheetName];
@@ -100,7 +102,7 @@ async function loadExcelData() {
         });
 
         conductorOptions = Array.from(rawOptionsMap.values()).sort();
-        // Initial populate (hidden)
+        // Populate lists initially so they are ready to show
         updateList('tap', '');
         updateList('stirrup', '');
         
@@ -137,7 +139,6 @@ function calculate() {
     }
 
     const isCopRef = val.toLowerCase().includes("copper") || val.toLowerCase().includes("refer");
-    
     if (isCopRef || !val) {
         for (let key of pairs) {
             if (copperDatabase[key]) {
@@ -155,45 +156,35 @@ function calculate() {
     }
 }
 
-// Replaces updateDropdowns. Manages the custom list UI.
 function updateList(type, filter) {
     const listEl = document.getElementById(`${type}-list`);
     const inputEl = document.getElementById(`${type}-search`);
-    
     if (!listEl) return;
 
     listEl.innerHTML = '';
-    
-    // If no filter and not focused, hide list (optional, but requested behavior implies always show matches)
-    // Actually request is "box below should expand".
-    
     const f = filter.toLowerCase();
     const matches = conductorOptions.filter(name => name.toLowerCase().includes(f));
 
     if (matches.length === 0) {
-        listEl.classList.add('hidden');
-        return;
-    }
-
-    matches.forEach(name => {
+        // Option to show "No matches" or just hide
         const div = document.createElement('div');
-        div.className = "p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 text-gray-800 font-bold text-sm";
-        div.textContent = name;
-        div.onclick = () => {
-            inputEl.value = name;
-            if (type === 'tap') selection1 = name;
-            else selection2 = name;
-            
-            listEl.classList.add('hidden'); // Hide after selection
-            calculate();
-        };
+        div.className = "p-3 text-gray-500 italic text-sm";
+        div.textContent = "No matches found";
         listEl.appendChild(div);
-    });
-
-    if (filter) {
-        listEl.classList.remove('hidden');
     } else {
-        listEl.classList.add('hidden'); // Hide if empty? User said "expand to show all options that contain na"
+        matches.forEach(name => {
+            const div = document.createElement('div');
+            div.className = "p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 text-gray-800 font-bold text-sm transition-colors";
+            div.textContent = name;
+            div.onclick = () => {
+                inputEl.value = name;
+                if (type === 'tap') selection1 = name;
+                else selection2 = name;
+                listEl.classList.add('hidden'); 
+                calculate();
+            };
+            listEl.appendChild(div);
+        });
     }
 }
 
@@ -205,7 +196,6 @@ function displayResult(text, key, shouldFlash) {
     
     body.style.backgroundColor = theme.body;
     
-    // Force reflow for animation
     box.classList.remove('flash-success');
     if (shouldFlash) {
         void box.offsetWidth; 
@@ -244,54 +234,78 @@ function displayResult(text, key, shouldFlash) {
 function setupEventListeners() {
     const tInput = document.getElementById('tap-search');
     const sInput = document.getElementById('stirrup-search');
-    
-    tInput.addEventListener('input', (e) => updateList('tap', e.target.value));
-    sInput.addEventListener('input', (e) => updateList('stirrup', e.target.value));
-    
-    // Show list on focus if there's text, or show all? 
-    // "show all options that contain na" -> implies filtering.
-    // "tap one straight away" -> Custom list.
-    
-    tInput.addEventListener('focus', (e) => {
-        if(e.target.value) updateList('tap', e.target.value);
+    const tList = document.getElementById('tap-list');
+    const sList = document.getElementById('stirrup-list');
+
+    // Input handlers
+    tInput.addEventListener('input', (e) => {
+        updateList('tap', e.target.value);
+        tList.classList.remove('hidden');
     });
-    sInput.addEventListener('focus', (e) => {
-        if(e.target.value) updateList('stirrup', e.target.value);
+    sInput.addEventListener('input', (e) => {
+        updateList('stirrup', e.target.value);
+        sList.classList.remove('hidden');
     });
 
-    // Close lists when clicking outside
+    // Focus handlers - Show list immediately on click/focus
+    tInput.addEventListener('focus', () => {
+        updateList('tap', tInput.value); // Ensure list is current
+        tList.classList.remove('hidden');
+    });
+    sInput.addEventListener('focus', () => {
+        updateList('stirrup', sInput.value);
+        sList.classList.remove('hidden');
+    });
+
+    // Click outside to close
     document.addEventListener('click', (e) => {
-        if (!e.target.closest('#tap-container')) document.getElementById('tap-list').classList.add('hidden');
-        if (!e.target.closest('#stirrup-container')) document.getElementById('stirrup-list').classList.add('hidden');
+        if (!e.target.closest('#tap-container')) tList.classList.add('hidden');
+        if (!e.target.closest('#stirrup-container')) sList.classList.add('hidden');
     });
 
     document.getElementById('reset-button').addEventListener('click', () => {
         selection1 = ''; selection2 = '';
         tInput.value = ''; sInput.value = '';
-        document.getElementById('tap-list').classList.add('hidden');
-        document.getElementById('stirrup-list').classList.add('hidden');
+        tList.classList.add('hidden');
+        sList.classList.add('hidden');
         displayResult('Ready', 'default', false);
     });
 }
 
 function setupPWA() {
     const installBtn = document.getElementById('install-btn');
+    const iosInstr = document.getElementById('ios-install-instructions');
     
+    // Check if iOS
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+
+    if (isIos && !isStandalone) {
+        if (iosInstr) iosInstr.classList.remove('hidden');
+    }
+
+    // Android/Desktop Install Prompt
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
-        if(installBtn) installBtn.classList.remove('hidden');
+        if (installBtn) {
+            installBtn.classList.remove('hidden');
+            installBtn.style.display = 'block'; // Force visible
+        }
     });
 
-    if(installBtn) {
+    if (installBtn) {
         installBtn.addEventListener('click', async () => {
             if (deferredPrompt) {
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') installBtn.classList.add('hidden');
+                if (outcome === 'accepted') {
+                    installBtn.classList.add('hidden');
+                    installBtn.style.display = 'none';
+                }
                 deferredPrompt = null;
             } else {
-                alert("To install: Tap browser menu and select 'Add to Home Screen'");
+                alert("To install on this device, please use your browser's menu and select 'Add to Home Screen' or 'Install App'.");
             }
         });
     }
