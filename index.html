@@ -7,85 +7,259 @@
     <title>AMPACT Selector</title>
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
-        .flash-success { animation: flash-green 0.6s ease-out; }
-        @keyframes flash-green {
-            0% { background-color: #22c55e; border-color: #166534; transform: scale(1); }
-            50% { transform: scale(1.08); }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            -webkit-tap-highlight-color: transparent; 
+            transition: background-color 0.5s ease;
+            background-color: #f3f4f6;
+        }
+        .flash-success { animation: flash-grow 0.6s ease-out; }
+        @keyframes flash-grow {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
             100% { transform: scale(1); }
         }
         .custom-list::-webkit-scrollbar { width: 6px; }
         .custom-list::-webkit-scrollbar-track { background: #f1f1f1; }
-        .custom-list::-webkit-scrollbar-thumb { background: #888; border-radius: 3px; }
+        .custom-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        .white-panel {
+            background-color: white;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
     </style>
 </head>
-<body id="body-bg" class="min-h-screen flex flex-col items-center p-4 transition-colors duration-500">
+<body class="min-h-screen p-4 pb-12 flex flex-col items-center">
 
-    <div class="w-full max-w-md mt-4">
-        <div class="bg-white rounded-[2.5rem] shadow-2xl p-8 border border-gray-100">
-            <header class="text-center mb-8">
-                <h1 class="text-4xl font-black text-gray-900 tracking-tighter uppercase mb-1 whitespace-nowrap">AMPACT Selector</h1>
-                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Created and Maintained by Donald Win</p>
-            </header>
-
-            <div class="space-y-6">
-                <!-- Conductor 1 -->
-                <div id="tap-container" class="relative">
-                    <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Conductor 1</label>
-                    <div class="relative">
-                        <input type="text" id="tap-search" placeholder="Search..." autocomplete="off"
-                            class="w-full pl-4 pr-10 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl outline-none text-sm font-medium focus:border-blue-500 focus:bg-white transition-all cursor-pointer">
-                        <button id="tap-clear" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-bold text-2xl leading-none">&times;</button>
-                    </div>
-                    <div id="tap-list" class="hidden absolute top-full left-0 right-0 mt-1 bg-white border-2 border-gray-100 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto custom-list"></div>
-                </div>
-
-                <!-- Conductor 2 -->
-                <div id="stirrup-container" class="relative">
-                    <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Conductor 2</label>
-                    <div class="relative">
-                        <input type="text" id="stirrup-search" placeholder="Search..." autocomplete="off"
-                            class="w-full pl-4 pr-10 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl outline-none text-sm font-medium focus:border-blue-500 focus:bg-white transition-all cursor-pointer">
-                        <button id="stirrup-clear" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-bold text-2xl leading-none">&times;</button>
-                    </div>
-                    <div id="stirrup-list" class="hidden absolute top-full left-0 right-0 mt-1 bg-white border-2 border-gray-100 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto custom-list"></div>
-                </div>
-
-                <div id="output-box" class="bg-gray-50 border-gray-200 border-4">
-                    <div id="output">
-                        <div class="text-gray-300 font-black text-4xl uppercase tracking-tighter">READY</div>
-                    </div>
-                </div>
-
-                <button id="reset-button" class="w-full py-2 text-gray-400 font-black uppercase tracking-widest text-[10px] hover:text-gray-600">Clear All</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="w-full max-w-md mt-6 space-y-3">
-        <button id="install-btn" class="hidden w-full bg-emerald-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-transform">
-            Install App
-        </button>
+    <div class="w-full max-w-md space-y-4">
         
-        <div id="ios-install-instructions" class="hidden bg-white/90 backdrop-blur rounded-2xl p-4 text-center border border-gray-200 shadow-lg">
-             <p class="text-gray-600 text-xs font-bold uppercase tracking-wide">Install on iOS</p>
-             <p class="text-gray-500 text-sm mt-1">Tap <span class="font-bold text-blue-500">Share</span> then <span class="font-bold text-gray-700">Add to Home Screen</span></p>
+        <!-- Maximized One-Line Header Panel -->
+        <header class="white-panel rounded-[2rem] relative overflow-hidden">
+            <div class="pt-5 px-6 pr-16 pb-1">
+                <h1 class="font-black text-3xl tracking-tighter uppercase leading-none flex flex-row items-center gap-2">
+                    <span class="text-gray-900">AMPACT</span> 
+                    <span id="header-selector" class="text-gray-300 transition-colors duration-500">SELECTOR</span>
+                </h1>
+            </div>
+            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] border-t border-gray-50 py-2 text-center">
+                Created and Maintained by Donald Win
+            </p>
+            
+            <!-- Settings Button - Smaller Circle -->
+            <button id="settings-btn" class="absolute right-4 top-3 w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-all active:scale-95 shadow-sm" aria-label="Open Settings">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+            </button>
+        </header>
+
+        <!-- Main Interaction Panel -->
+        <div class="white-panel rounded-[3rem] p-6 space-y-6">
+            
+            <!-- Conductor A Search -->
+            <div id="tap-container" class="relative">
+                <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-4">Conductor A (Main)</label>
+                <div class="relative">
+                    <input 
+                        type="text" 
+                        id="tap-search" 
+                        placeholder="Search Conductor..." 
+                        autocomplete="off"
+                        role="combobox"
+                        aria-expanded="false"
+                        aria-controls="tap-list"
+                        aria-label="Search for Conductor A (Main Line)"
+                        class="w-full bg-gray-100 border-none rounded-2xl py-4 px-5 font-bold text-gray-800 focus:ring-4 focus:ring-blue-500/20 outline-none transition-all placeholder:text-gray-400">
+                    <button id="tap-clear" class="hidden absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" aria-label="Clear Conductor A search">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                <div id="tap-list" role="listbox" class="hidden absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 max-h-60 overflow-y-auto custom-list"></div>
+            </div>
+
+            <!-- Conductor B Search -->
+            <div id="stirrup-container" class="relative">
+                <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-4">Conductor B (Tap)</label>
+                <div class="relative">
+                    <input 
+                        type="text" 
+                        id="stirrup-search" 
+                        placeholder="Search Conductor..." 
+                        autocomplete="off"
+                        role="combobox"
+                        aria-expanded="false"
+                        aria-controls="stirrup-list"
+                        aria-label="Search for Conductor B (Tap Line)"
+                        class="w-full bg-gray-100 border-none rounded-2xl py-4 px-5 font-bold text-gray-800 focus:ring-4 focus:ring-blue-500/20 outline-none transition-all placeholder:text-gray-400">
+                    <button id="stirrup-clear" class="hidden absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" aria-label="Clear Conductor B search">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                <div id="stirrup-list" role="listbox" class="hidden absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 max-h-60 overflow-y-auto custom-list"></div>
+            </div>
+
+            <!-- Result Box -->
+            <div id="output-box" class="p-4 rounded-[2.5rem] border-4 text-center min-h-[140px] w-full flex flex-col items-center justify-center transition-all duration-300 bg-gray-50 border-gray-100" role="status" aria-live="polite">
+                <div id="output" class="font-black uppercase text-gray-300 text-3xl tracking-tighter">Ready</div>
+            </div>
+
+            <button id="reset-button" class="w-full py-5 rounded-2xl bg-gray-900 text-white font-black uppercase tracking-widest text-xs active:scale-95 transition-all hover:bg-black shadow-lg">
+                Clear Selection
+            </button>
         </div>
 
-        <footer class="bg-black/80 backdrop-blur-md rounded-2xl p-4 text-center border border-white/10 shadow-lg">
-            <a href="https://github.com/donald-win/AMPACT.PWA" target="_blank" class="text-white hover:text-blue-400 text-[10px] font-bold uppercase tracking-widest transition-colors block mb-1">GitHub: AMPACT.PWA</a>
-            <div id="version-tag" class="text-white/40 text-[10px] font-black uppercase tracking-widest">v6.3.2</div>
-        </footer>
+        <!-- External UI & Footer -->
+        <div class="w-full space-y-4">
+            <button id="install-btn" class="hidden w-full bg-emerald-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-transform">
+                Install App
+            </button>
+            
+            <footer class="bg-black/80 backdrop-blur-md rounded-[2rem] p-6 text-center border border-white/10 shadow-lg">
+                <div class="text-white/70 text-sm font-semibold uppercase tracking-[0.2em] mb-2">
+                    Built by a Lineman for Linemen
+                </div>
+                <div class="text-white/50 text-xs font-medium uppercase tracking-[0.15em]">
+                    (Not to be used as a hammer)
+                </div>
+            </footer>
+        </div>
+
     </div>
 
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js').catch(() => {});
-        }
-    </script>
+    <!-- Settings Panel Overlay -->
+    <div id="settings-overlay" class="hidden fixed inset-0 bg-black/50 z-40 transition-opacity"></div>
+
+    <!-- Settings Panel (Slide from Right) -->
+    <div id="settings-panel" class="fixed top-0 right-0 h-full w-full max-w-md bg-white z-50 transform translate-x-full transition-transform duration-300 ease-in-out shadow-2xl">
+        <div class="h-full flex flex-col">
+            
+            <!-- Settings Header -->
+            <div class="bg-gray-900 text-white p-6 flex items-center justify-between">
+                <h2 class="text-2xl font-black uppercase tracking-tight">Settings</h2>
+                <button id="settings-close" class="text-white hover:text-gray-300 transition-colors" aria-label="Close Settings">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Settings Content -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-8">
+                
+                <!-- Sort By Section -->
+                <div>
+                    <h3 class="text-sm font-black uppercase tracking-widest text-gray-400 mb-4">Sort Conductors By</h3>
+                    <div class="space-y-3">
+                        
+                        <label class="flex items-center p-4 bg-gray-50 rounded-2xl cursor-pointer hover:bg-gray-100 transition-colors">
+                            <input type="radio" name="sortBy" value="name" class="w-5 h-5 text-blue-600 focus:ring-blue-500 focus:ring-2">
+                            <div class="ml-4">
+                                <div class="font-bold text-gray-900">Name (A-Z)</div>
+                                <div class="text-xs text-gray-500">Alphabetical order</div>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center p-4 bg-gray-50 rounded-2xl cursor-pointer hover:bg-gray-100 transition-colors">
+                            <input type="radio" name="sortBy" value="size" class="w-5 h-5 text-blue-600 focus:ring-blue-500 focus:ring-2">
+                            <div class="ml-4">
+                                <div class="font-bold text-gray-900">Size (Largest First)</div>
+                                <div class="text-xs text-gray-500">By diameter in mm</div>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center p-4 bg-gray-50 rounded-2xl cursor-pointer hover:bg-gray-100 transition-colors">
+                            <input type="radio" name="sortBy" value="material" class="w-5 h-5 text-blue-600 focus:ring-blue-500 focus:ring-2">
+                            <div class="ml-4">
+                                <div class="font-bold text-gray-900">Material</div>
+                                <div class="text-xs text-gray-500">Aluminum, Copper, etc.</div>
+                            </div>
+                        </label>
+
+                    </div>
+                </div>
+
+                <!-- Display Options Section -->
+                <div>
+                    <h3 class="text-sm font-black uppercase tracking-widest text-gray-400 mb-4">Display Options</h3>
+                    <div class="space-y-3">
+                        
+                        <label class="flex items-center justify-between p-4 bg-gray-50 rounded-2xl cursor-pointer hover:bg-gray-100 transition-colors">
+                            <div>
+                                <div class="font-bold text-gray-900">Show Diameters</div>
+                                <div class="text-xs text-gray-500">Display size in search results</div>
+                            </div>
+                            <input type="checkbox" id="setting-show-diameters" class="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 focus:ring-2">
+                        </label>
+
+                    </div>
+                </div>
+
+                <!-- Conductor Visibility Section -->
+                <div>
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-black uppercase tracking-widest text-gray-400">Conductor Visibility</h3>
+                        <div id="conductor-count" class="text-xs font-bold text-blue-600"></div>
+                    </div>
+                    
+                    <!-- Search Conductors -->
+                    <div class="mb-3">
+                        <input 
+                            type="text" 
+                            id="conductor-visibility-search" 
+                            placeholder="Search conductors..."
+                            class="w-full bg-gray-100 border-none rounded-xl py-3 px-4 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-gray-400">
+                    </div>
+
+                    <!-- Quick Actions -->
+                    <div class="flex gap-2 mb-3">
+                        <button id="show-all-conductors" class="flex-1 py-2 px-3 bg-green-50 text-green-700 rounded-xl text-xs font-bold hover:bg-green-100 transition-colors">
+                            Show All
+                        </button>
+                        <button id="hide-all-conductors" class="flex-1 py-2 px-3 bg-red-50 text-red-700 rounded-xl text-xs font-bold hover:bg-red-100 transition-colors">
+                            Hide All
+                        </button>
+                    </div>
+
+                    <!-- Conductor List -->
+                    <div id="conductor-visibility-list" class="space-y-2 max-h-96 overflow-y-auto custom-list">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+
+                <!-- About & Copyright Section -->
+                <div>
+                    <h3 class="text-sm font-black uppercase tracking-widest text-gray-400 mb-4">About</h3>
+                    <div class="p-5 bg-gray-50 rounded-2xl space-y-4">
+                        <div>
+                            <div class="font-black text-gray-900 text-lg">AMPACT Selector</div>
+                        </div>
+                        
+                        <div class="border-t border-gray-200 pt-4">
+                            <div class="text-xs text-gray-700 leading-relaxed space-y-2">
+                                <p class="font-bold text-gray-900">Copyright © 2026 Donald Win</p>
+                                <p>All rights reserved.</p>
+                                <p>No part of this software, including the app.js logic and data.csv database, may be reproduced, distributed, or transmitted in any form or by any means, including photocopying, recording, or other electronic or mechanical methods, without the prior written permission of the author.</p>
+                                <p class="font-semibold text-gray-900">Access to this application is granted at the sole discretion of Donald Win and may be revoked at any time.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="border-t border-gray-200 pt-4">
+                            <div class="text-[10px] text-gray-500 italic text-center">
+                                Built by a Lineman for Linemen<br>
+                                (Not to be used as a hammer)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>
