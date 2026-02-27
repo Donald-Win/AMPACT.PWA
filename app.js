@@ -1,5 +1,5 @@
 /**
- * AMPACT Selector - v13.2.0
+ * AMPACT Selector - v13.1.0
  * Airtable kill-switch with master toggle - SYSTEM-CONTROL record for open/whitelist mode
  */
 let dbData = []; 
@@ -15,12 +15,14 @@ const APP_VERSION = "v13.2.0";
 
 const CHANGELOG = {
     "v13.2.0": {
-        title: "Updated for my mate Jono.",
+        title: "New Feature: Reverse Lookup! 🔍",
         date: "February 2026",
         features: [
             "Added Reverse Lookup mode - enter any AMPACT code (long or short) to see all compatible conductor pairs",
             "Mode toggle buttons let you switch between Find Connector and Reverse Lookup",
-            "Reverse lookup respects your hidden conductor settings"
+            "Reverse lookup respects your hidden conductor settings",
+            "Results show color-coded by wedge type",
+            "Single-line result display for better readability"
         ]
     }
 };
@@ -124,6 +126,82 @@ window.addEventListener('appinstalled', () => {
     const installBtn = document.getElementById('install-btn');
     if (installBtn) installBtn.classList.add('hidden');
 });
+
+
+// ============================================
+// SERVICE WORKER UPDATE DETECTION
+// ============================================
+
+function setupUpdateDetection() {
+    if (!('serviceWorker' in navigator)) return;
+    
+    let refreshing = false;
+    
+    // Detect when new service worker is waiting to activate
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+    });
+    
+    // Check for updates every time the page loads
+    navigator.serviceWorker.ready.then(registration => {
+        registration.update();
+        
+        // If there's a waiting service worker, prompt user to update
+        if (registration.waiting) {
+            showUpdatePrompt(registration.waiting);
+        }
+        
+        // Listen for new service worker installing
+        registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            
+            newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    // New service worker is ready
+                    showUpdatePrompt(newWorker);
+                }
+            });
+        });
+    });
+}
+
+function showUpdatePrompt(worker) {
+    const overlay = document.createElement('div');
+    overlay.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4';
+    
+    const modal = document.createElement('div');
+    modal.className = 'bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl';
+    
+    modal.innerHTML = `
+        <div class="text-center mb-4">
+            <div class="text-4xl mb-2">🔄</div>
+            <h2 class="text-xl font-black text-gray-900 mb-2">Update Available!</h2>
+            <p class="text-sm text-gray-600">A new version of AMPACT Selector is ready to install.</p>
+        </div>
+        
+        <div class="space-y-2">
+            <button id="update-now" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-lg active:scale-95 transition-all hover:bg-blue-700">
+                Update Now
+            </button>
+            <button id="update-later" class="w-full bg-gray-200 text-gray-700 py-3 rounded-2xl font-bold uppercase tracking-wider text-xs active:scale-95 transition-all hover:bg-gray-300">
+                Later
+            </button>
+        </div>
+    `;
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    document.getElementById('update-now').addEventListener('click', () => {
+        worker.postMessage({ type: 'SKIP_WAITING' });
+    });
+    
+    document.getElementById('update-later').addEventListener('click', () => {
+        overlay.remove();
+    });
+}
 
 // Keyboard navigation state
 let selectedIndex = -1;
@@ -639,6 +717,7 @@ window.onload = async () => {
     setupModeToggle();
     setupSettingsPanel();
     setupPWA();
+    setupUpdateDetection();
     
     // Check if we should show changelog for this version
     checkAndShowChangelog();

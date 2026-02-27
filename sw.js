@@ -94,3 +94,10 @@ self.addEventListener('fetch', (e) => {
     );
   }
 });
+
+// Handle skip waiting message from app
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
