@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ampact-cache-v13.1.0';
+const CACHE_NAME = 'ampact-cache-v13.2.0';
 const ASSETS = [
   './',
   './index.html',
@@ -9,7 +9,7 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  console.log('[Service Worker] Installing v13.1.0');
+  console.log('[Service Worker] Installing v13.2.0');
   self.skipWaiting();
   e.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
@@ -20,7 +20,7 @@ self.addEventListener('install', (e) => {
 });
 
 self.addEventListener('activate', (e) => {
-  console.log('[Service Worker] Activating v13.1.0');
+  console.log('[Service Worker] Activating v13.2.0');
   e.waitUntil(
     caches.keys().then(keys => {
       return Promise.all(

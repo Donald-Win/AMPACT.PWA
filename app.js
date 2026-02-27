@@ -7,7 +7,104 @@ let conductorOptions = [];
 let selection1 = '';
 let selection2 = '';
 let deferredPrompt = null;
-const APP_VERSION = "v13.1.0";
+const APP_VERSION = "v13.2.0";
+
+// ============================================
+// CHANGELOG SYSTEM
+// ============================================
+
+const CHANGELOG = {
+    "v13.2.0": {
+        title: "Updated for my mate Jono.",
+        date: "February 2026",
+        features: [
+            "Added Reverse Lookup mode - enter any AMPACT code (long or short) to see all compatible conductor pairs",
+            "Mode toggle buttons let you switch between Find Connector and Reverse Lookup",
+            "Reverse lookup respects your hidden conductor settings"
+        ]
+    }
+};
+
+function checkAndShowChangelog() {
+    const lastSeenVersion = localStorage.getItem('ampact_last_seen_version');
+    
+    // If user hasn't seen this version's changelog, show it
+    if (lastSeenVersion !== APP_VERSION && CHANGELOG[APP_VERSION]) {
+        showChangelog(APP_VERSION);
+        localStorage.setItem('ampact_last_seen_version', APP_VERSION);
+    }
+}
+
+function showChangelog(version) {
+    const changelog = CHANGELOG[version];
+    if (!changelog) return;
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'changelog-overlay';
+    overlay.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fadeIn';
+    overlay.style.animation = 'fadeIn 0.3s ease-out';
+    
+    const modal = document.createElement('div');
+    modal.className = 'bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl transform animate-slideUp';
+    modal.style.animation = 'slideUp 0.4s ease-out';
+    
+    let featuresHTML = changelog.features.map(f => 
+        `<li class="flex gap-2 items-start"><span class="text-blue-600 font-black">•</span><span>${f}</span></li>`
+    ).join('');
+    
+    modal.innerHTML = `
+        <div class="text-center mb-4">
+            <div class="text-4xl mb-2">🎉</div>
+            <h2 class="text-2xl font-black text-gray-900 mb-1">${changelog.title}</h2>
+            <div class="text-xs text-gray-500 font-bold uppercase tracking-wider">${changelog.date} • ${version}</div>
+        </div>
+        
+        <div class="bg-blue-50 rounded-2xl p-4 mb-4">
+            <ul class="space-y-2 text-sm text-gray-700">
+                ${featuresHTML}
+            </ul>
+        </div>
+        
+        <button id="changelog-close" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-lg active:scale-95 transition-all hover:bg-blue-700">
+            Got it!
+        </button>
+    `;
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    // Add animations
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    // Close handlers
+    document.getElementById('changelog-close').addEventListener('click', () => {
+        overlay.style.animation = 'fadeOut 0.3s ease-out';
+        setTimeout(() => overlay.remove(), 300);
+    });
+    
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            overlay.style.animation = 'fadeOut 0.3s ease-out';
+            setTimeout(() => overlay.remove(), 300);
+        }
+    });
+}
+
+// Expose for manual triggering
+window.showChangelog = () => showChangelog(APP_VERSION);
+
+let currentMode = 'find'; // 'find' or 'reverse'
 
 
 // ============================================
@@ -539,8 +636,12 @@ window.onload = async () => {
     hideLoadingIndicator();
     
     setupEventListeners();
+    setupModeToggle();
     setupSettingsPanel();
     setupPWA();
+    
+    // Check if we should show changelog for this version
+    checkAndShowChangelog();
 };
 
 // ============================================
@@ -1031,6 +1132,139 @@ function updateKeyboardSelection() {
 // ============================================
 // EVENT LISTENERS
 // ============================================
+
+
+// ============================================
+// REVERSE LOOKUP MODE
+// ============================================
+
+function setupModeToggle() {
+    const findBtn = document.getElementById('mode-find');
+    const reverseBtn = document.getElementById('mode-reverse');
+    const normalMode = document.getElementById('normal-mode');
+    const reverseMode = document.getElementById('reverse-mode');
+    const reverseSearch = document.getElementById('reverse-search');
+    const reverseClear = document.getElementById('reverse-clear');
+    
+    findBtn.addEventListener('click', () => {
+        currentMode = 'find';
+        findBtn.className = 'flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-wider transition-all active:scale-95 bg-blue-600 text-white shadow-lg';
+        reverseBtn.className = 'flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-wider transition-all active:scale-95 bg-gray-200 text-gray-600';
+        normalMode.classList.remove('hidden');
+        reverseMode.classList.add('hidden');
+        displayResults([], 'default');
+    });
+    
+    reverseBtn.addEventListener('click', () => {
+        currentMode = 'reverse';
+        reverseBtn.className = 'flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-wider transition-all active:scale-95 bg-blue-600 text-white shadow-lg';
+        findBtn.className = 'flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-wider transition-all active:scale-95 bg-gray-200 text-gray-600';
+        reverseMode.classList.remove('hidden');
+        normalMode.classList.add('hidden');
+        displayResults([], 'default');
+        reverseSearch.focus();
+    });
+    
+    reverseSearch.addEventListener('input', (e) => {
+        const query = e.target.value.trim().toUpperCase();
+        
+        if (query.length === 0) {
+            reverseClear.classList.add('hidden');
+            displayResults([], 'default');
+            return;
+        }
+        
+        reverseClear.classList.remove('hidden');
+        performReverseLookup(query);
+    });
+    
+    reverseClear.addEventListener('click', () => {
+        reverseSearch.value = '';
+        reverseClear.classList.add('hidden');
+        displayResults([], 'default');
+        reverseSearch.focus();
+    });
+}
+
+function performReverseLookup(query) {
+    const matches = dbData.filter(row => {
+        const partNumber = (row.Part_Number || '').toUpperCase();
+        const shortCode = (row.NZ_Alpha_Short_Code || '').toUpperCase();
+        return partNumber === query || shortCode === query;
+    });
+    
+    if (matches.length === 0) {
+        displayReverseLookupResults([], 'none');
+        return;
+    }
+    
+    const themeKey = (matches[0].Chart_Source || 'default').toLowerCase();
+    displayReverseLookupResults(matches, themeKey);
+}
+
+function displayReverseLookupResults(matches, themeKey) {
+    const outputBox = document.getElementById('output-box');
+    const headerSelector = document.getElementById('header-selector');
+    const theme = colorThemes[themeKey] || colorThemes.default;
+
+    document.body.style.backgroundColor = theme.body;
+    headerSelector.className = `transition-colors duration-500 ${theme.header}`;
+    
+    outputBox.className = `p-4 rounded-[2.5rem] border-4 text-center min-h-[140px] w-full flex flex-col items-center justify-center transition-all duration-300 ${theme.bg} ${theme.border}`;
+    
+    if (themeKey === 'default') {
+        outputBox.innerHTML = `<div class="font-black uppercase text-gray-300 text-3xl tracking-tighter">Ready</div>`;
+        return;
+    }
+
+    if (matches.length === 0) {
+        outputBox.innerHTML = `<div class="font-black uppercase text-white text-2xl tracking-tighter">No Match</div>`;
+        return;
+    }
+    
+    const pairs = new Set();
+    matches.forEach(m => {
+        // Skip if either conductor is hidden
+        if (settings.hiddenConductors.includes(m.Cable_A_Name) || 
+            settings.hiddenConductors.includes(m.Cable_B_Name)) {
+            return;
+        }
+        const pair = [m.Cable_A_Name, m.Cable_B_Name].sort().join(' + ');
+        pairs.add(pair);
+    });
+    
+    let html = `<div class="w-full space-y-3 max-h-[400px] overflow-y-auto custom-list">`;
+    
+    const firstMatch = matches[0];
+    const shortCode = firstMatch.NZ_Alpha_Short_Code && firstMatch.NZ_Alpha_Short_Code.trim();
+    html += `
+        <div class="pb-3 border-b-2 ${theme.border} mb-3">
+            <div class="flex flex-row items-center justify-center gap-3 w-full">
+                <div class="font-black uppercase tracking-tighter ${theme.text}" style="font-size: clamp(1.1rem, 5.5vw, 1.875rem);">${firstMatch.Part_Number}</div>
+                ${shortCode ? `<div class="px-4 py-2 rounded-2xl font-black uppercase tracking-tight ${theme.sub} ${theme.text} shadow-sm flex-shrink-0" style="font-size: clamp(1rem, 4.5vw, 1.5rem);">${shortCode}</div>` : ''}
+            </div>
+        </div>
+    `;
+    
+    html += `<div class="text-xs font-black uppercase tracking-widest ${theme.text} mb-2 opacity-70">Compatible Pairs:</div>`;
+    
+    Array.from(pairs).forEach(pair => {
+        const [condA, condB] = pair.split(' + ');
+        html += `
+            <div class="py-2 px-3 rounded-xl ${theme.sub} ${theme.text}">
+                <div class="font-bold text-sm">${condA}</div>
+                <div class="text-xs opacity-70">+</div>
+                <div class="font-bold text-sm">${condB}</div>
+            </div>
+        `;
+    });
+    
+    html += `</div>`;
+    
+    outputBox.innerHTML = html;
+    outputBox.classList.add('flash-success');
+    setTimeout(() => outputBox.classList.remove('flash-success'), 600);
+}
 
 function setupEventListeners() {
     ['tap', 'stirrup'].forEach(type => {

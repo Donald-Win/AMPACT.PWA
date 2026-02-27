@@ -59,6 +59,19 @@
         <!-- Main Interaction Panel -->
         <div class="white-panel rounded-[3rem] p-6 space-y-6">
             
+            <!-- Mode Toggle -->
+            <div class="flex gap-2">
+                <button id="mode-find" class="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-wider transition-all active:scale-95 bg-blue-600 text-white shadow-lg">
+                    Find Connector
+                </button>
+                <button id="mode-reverse" class="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-wider transition-all active:scale-95 bg-gray-200 text-gray-600">
+                    Reverse Lookup
+                </button>
+            </div>
+            
+            <!-- Normal Mode: Find Connector -->
+            <div id="normal-mode">
+            
             <!-- Conductor A Search -->
             <div id="tap-container" class="relative">
                 <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-4">Conductor A (Main)</label>
@@ -100,6 +113,24 @@
                 </div>
                 <div id="stirrup-list" role="listbox" class="hidden absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 max-h-60 overflow-y-auto custom-list"></div>
             </div>
+            
+            </div><!-- End normal-mode -->
+            
+            <!-- Reverse Lookup Mode -->
+            <div id="reverse-mode" class="hidden">
+                <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-4">AMPACT Code</label>
+                <div class="relative">
+                    <input 
+                        type="text" 
+                        id="reverse-search" 
+                        placeholder="e.g. 1-602031-7 or Y2-28" 
+                        autocomplete="off"
+                        class="w-full bg-gray-100 border-none rounded-2xl py-4 px-5 font-bold text-gray-800 focus:ring-4 focus:ring-blue-500/20 outline-none transition-all placeholder:text-gray-400 uppercase">
+                    <button id="reverse-clear" class="hidden absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" aria-label="Clear reverse lookup">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+            </div><!-- End reverse-mode -->
 
             <!-- Result Box -->
             <div id="output-box" class="p-4 rounded-[2.5rem] border-4 text-center min-h-[140px] w-full flex flex-col items-center justify-center transition-all duration-300 bg-gray-50 border-gray-100" role="status" aria-live="polite">
