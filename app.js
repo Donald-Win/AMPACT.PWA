@@ -1,5 +1,5 @@
 /**
- * AMPACT Selector - v13.1.0
+ * AMPACT Selector - v13.2.0
  * Airtable kill-switch with master toggle - SYSTEM-CONTROL record for open/whitelist mode
  */
 let dbData = []; 
@@ -224,252 +224,156 @@ const colorThemes = {
 };
 
 // ============================================
-// AIRTABLE KILL-SWITCH SYSTEM
+// ACCESS CONTROL - Cloudflare Worker
 // ============================================
 
-// Airtable Configuration
-const AIRTABLE_API_KEY = 'pathyQ35ljIIfc6P1.6c6cc5145624397a62eb91865a593a644e36e9bc219e12dd2a5ca2190588a95b';
-const AIRTABLE_BASE_ID = 'appYJl5tHceGi8tlA';
-const AIRTABLE_TABLE_NAME = 'Users';
-const AIRTABLE_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`;
+const WORKER_URL = 'https://re-former-auth.donald-c-win-2a0.workers.dev';
+const WORKER_APP_ID = 'ampact';
+const CACHE_KEY = 'ampact_cached_access';
+const CACHE_CHECK_KEY = 'ampact_last_check';
+const POLL_MS = 45000; // 45 seconds
 
-/**
- * Generate stable device fingerprint
- */
-function generateDeviceFingerprint() {
-    const components = {
-        screen: `${screen.width}x${screen.height}x${screen.colorDepth}`,
-        userAgent: navigator.userAgent,
-        language: navigator.language,
-        platform: navigator.platform,
-        hardwareConcurrency: navigator.hardwareConcurrency || 0,
-        deviceMemory: navigator.deviceMemory || 0,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        timezoneOffset: new Date().getTimezoneOffset(),
-        canvas: (() => {
-            try {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                ctx.textBaseline = 'top';
-                ctx.font = '14px Arial';
-                ctx.fillStyle = '#f60';
-                ctx.fillRect(125, 1, 62, 20);
-                ctx.fillStyle = '#069';
-                ctx.fillText('AMPACT', 2, 15);
-                return canvas.toDataURL().slice(-50);
-            } catch (e) {
-                return 'canvas_unavailable';
+let _pollTimer = null;
+
+function startPolling() {
+    if (_pollTimer) clearInterval(_pollTimer);
+    _pollTimer = setInterval(async () => {
+        if (!navigator.onLine) return;
+        try {
+            const result = await checkWorker();
+            if (!result.allowed) {
+                clearInterval(_pollTimer);
+                await showAccessDeniedScreen(getDeviceId(), {
+                    title: 'Access Revoked',
+                    body: 'Your access to AMPACT Selector has been revoked. Contact Donald Win if you believe this is an error.',
+                    showAccessId: true,
+                    contactEmail: 'donald.c.win@gmail.com'
+                });
             }
-        })()
-    };
-    
-    const componentString = JSON.stringify(components);
-    let hash = 0;
-    for (let i = 0; i < componentString.length; i++) {
-        const char = componentString.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash;
-    }
-    
-    const hexHash = Math.abs(hash).toString(16).toUpperCase().padStart(12, '0');
-    return `AMP-${hexHash.substring(0, 4)}-${hexHash.substring(4, 8)}-${hexHash.substring(8, 12)}`;
+        } catch (e) { /* network hiccup - try next interval */ }
+    }, POLL_MS);
+}
+
+// Re-check immediately when tab becomes visible
+document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible' || !navigator.onLine) return;
+    try {
+        const result = await checkWorker();
+        if (!result.allowed) {
+            if (_pollTimer) clearInterval(_pollTimer);
+            await showAccessDeniedScreen(getDeviceId(), {
+                title: 'Access Revoked',
+                body: 'Your access to AMPACT Selector has been revoked. Contact Donald Win if you believe this is an error.',
+                showAccessId: true,
+                contactEmail: 'donald.c.win@gmail.com'
+            });
+        }
+    } catch (e) { /* ignore */ }
+});
+
+// Re-check immediately when connection is restored
+window.addEventListener('online', async () => {
+    try {
+        const result = await checkWorker();
+        if (result.allowed) {
+            startPolling();
+        } else {
+            if (_pollTimer) clearInterval(_pollTimer);
+            await showAccessDeniedScreen(getDeviceId(), {
+                title: 'Access Revoked',
+                body: 'Your access to AMPACT Selector has been revoked. Contact Donald Win if you believe this is an error.',
+                showAccessId: true,
+                contactEmail: 'donald.c.win@gmail.com'
+            });
+        }
+    } catch (e) { /* ignore */ }
+});
+
+// Device ID — stable random UUID stored in localStorage.
+// Format: AMP-XXXX-XXXX-XXXX (hex, uppercase)
+function generateDeviceId() {
+    const uuid = crypto.randomUUID().replace(/-/g, '').toUpperCase();
+    return 'DCW-' + uuid.slice(0, 4) + '-' + uuid.slice(4, 8) + '-' + uuid.slice(8, 12);
 }
 
 function getDeviceId() {
-    let deviceId = localStorage.getItem('ampact_device_id');
-    if (!deviceId) {
-        deviceId = generateDeviceFingerprint();
-        localStorage.setItem('ampact_device_id', deviceId);
+    let deviceId = localStorage.getItem('dcw-device-id');
+    if (!deviceId || !/^DCW-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}$/.test(deviceId)) {
+        deviceId = generateDeviceId();
+        localStorage.setItem('dcw-device-id', deviceId);
     }
     return deviceId;
 }
 
-function isValidDeviceId(id) {
-    if (typeof id !== 'string') return false;
-    const pattern = /^AMP-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
-    return pattern.test(id);
-}
-
-/**
- * Check if device ID is in allowed list (exact match)
- */
-function isDeviceAllowed(deviceId, allowedList) {
-    if (!Array.isArray(allowedList)) return false;
-    if (!isValidDeviceId(deviceId)) return false;
-    
-    const cleanedList = allowedList
-        .filter(id => typeof id === 'string' && id.trim().length > 0)
-        .map(id => id.trim().toUpperCase());
-    
-    const deviceIdUpper = deviceId.toUpperCase();
-    const isAllowed = cleanedList.some(allowedId => allowedId === deviceIdUpper);
-    
-    if (isAllowed) {
-        console.log('✓ Access granted:', deviceId);
-    } else {
-        console.log('✗ Access denied:', deviceId);
-    }
-    
-    return isAllowed;
+// Call the Cloudflare Worker and cache the result
+async function checkWorker() {
+    const deviceId = getDeviceId();
+    const res = await fetch(WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: deviceId, app: WORKER_APP_ID }),
+        cache: 'no-store'
+    });
+    if (!res.ok) throw new Error('Worker responded ' + res.status);
+    const result = await res.json();
+    // Cache result for offline use
+    try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(
+            Object.assign({}, result, { cachedAt: Date.now() })
+        ));
+        localStorage.setItem(CACHE_CHECK_KEY, new Date().toISOString());
+    } catch (e) { /* storage full */ }
+    return result;
 }
 
 async function checkKillSwitch() {
-    try {
-        const deviceId = getDeviceId();
-        
-        // Validate device ID
-        if (!isValidDeviceId(deviceId)) {
-            console.error('Invalid device ID, regenerating...');
-            localStorage.removeItem('ampact_device_id');
-            location.reload();
-            return false;
-        }
-        
-        // Fetch from Airtable
-        console.log('Fetching from Airtable...');
-        console.log('Base:', AIRTABLE_BASE_ID);
-        console.log('Table:', AIRTABLE_TABLE_NAME);
-        
-        const response = await fetch(AIRTABLE_URL, {
-            headers: {
-                'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        
-        console.log('✓ Fresh data from Airtable loaded');
-        console.log('Total records:', data.records?.length || 0);
-        
-        if (!data.records || !Array.isArray(data.records)) {
-            console.error('No records found in Airtable');
-            return true; // Fail open
-        }
-        
-        // Check for master control record (SYSTEM-CONTROL)
-        const masterControl = data.records.find(record => 
-            record.fields['Access ID'] === 'SYSTEM-CONTROL'
-        );
-        
-        if (masterControl) {
-            const masterStatus = (masterControl.fields['Status'] || '').toLowerCase();
-            console.log('Master control found:', masterStatus);
-            
-            if (masterStatus === 'active') {
-                console.log('🌍 OPEN MODE - Allowing all users (master switch is Active)');
-                // Cache for offline use
-                localStorage.setItem('ampact_cached_access', JSON.stringify({
-                    records: data.records,
-                    timestamp: new Date().toISOString(),
-                    openMode: true
-                }));
-                localStorage.setItem('ampact_last_check', new Date().toISOString());
-                return true; // Allow everyone
-            } else {
-                console.log('🔒 WHITELIST MODE - Checking individual users (master switch is Revoked)');
-            }
-        } else {
-            console.log('No master control found - defaulting to whitelist mode');
-        }
-        
-        // Whitelist mode: Extract active users (excluding SYSTEM-CONTROL)
-        const activeUsers = data.records
-            .filter(record => {
-                const status = record.fields['Status'];
-                const accessId = record.fields['Access ID'];
-                // Exclude SYSTEM-CONTROL from user list
-                return accessId !== 'SYSTEM-CONTROL' && 
-                       status && 
-                       status.toLowerCase() === 'active';
-            })
-            .map(record => record.fields['Access ID'])
-            .filter(id => id && typeof id === 'string');
-        
-        console.log('Active users:', activeUsers.length);
-        console.log('Active IDs:', activeUsers);
-        
-        // Check if current device is allowed
-        if (isDeviceAllowed(deviceId, activeUsers)) {
-            // Cache for offline use
-            localStorage.setItem('ampact_cached_access', JSON.stringify({
-                records: data.records,
-                timestamp: new Date().toISOString(),
-                openMode: false
-            }));
-            localStorage.setItem('ampact_last_check', new Date().toISOString());
-            return true;
-        } else {
-            // Access denied
-            await showAccessDeniedScreen(deviceId, {
-                title: 'Access Change Required',
-                body: 'Due to recent changes, this app now requires explicit authorization. If you need continued access, please send your Access ID below to Donald Win.',
-                showAccessId: true,
-                contactEmail: 'donald.c.win@gmail.com'
-            });
-            return false;
-        }
-        
-    } catch (err) {
-        console.error('Kill-switch check failed:', err);
-        console.error('Error details:', err.message);
-        
-        // Try cached version (offline mode)
+    const deviceId = getDeviceId();
+
+    if (navigator.onLine) {
         try {
-            const cached = localStorage.getItem('ampact_cached_access');
-            if (cached) {
-                const cachedData = JSON.parse(cached);
-                const deviceId = getDeviceId();
-                const lastCheck = localStorage.getItem('ampact_last_check');
-                
-                console.warn('⚠️ Using CACHED access control from:', lastCheck);
-                console.log('Cached records:', cachedData.records?.length || 0);
-                
-                // Check if cached state was open mode
-                if (cachedData.openMode === true) {
-                    console.log('🌍 OPEN MODE from cache - Allowing all users');
-                    return true;
-                }
-                
-                if (cachedData.records && Array.isArray(cachedData.records)) {
-                    const activeUsers = cachedData.records
-                        .filter(record => {
-                            const status = record.fields['Status'];
-                            const accessId = record.fields['Access ID'];
-                            return accessId !== 'SYSTEM-CONTROL' && 
-                                   status && 
-                                   status.toLowerCase() === 'active';
-                        })
-                        .map(record => record.fields['Access ID'])
-                        .filter(id => id && typeof id === 'string');
-                    
-                    if (isDeviceAllowed(deviceId, activeUsers)) {
-                        console.log('✓ Access granted from cache (offline mode)');
-                        return true;
-                    } else {
-                        console.log('✗ Access denied from cache');
-                        await showAccessDeniedScreen(deviceId, {
-                            title: 'Access Restricted',
-                            body: 'This application requires authorization. You appear to be offline or your access has been revoked.',
-                            showAccessId: true,
-                            contactEmail: 'donald.c.win@gmail.com'
-                        });
-                        return false;
-                    }
-                }
+            const result = await checkWorker();
+            if (result.allowed) {
+                startPolling();
+                return true;
+            } else {
+                await showAccessDeniedScreen(deviceId, {
+                    title: 'Access Change Required',
+                    body: 'Due to recent changes, this app now requires explicit authorization. If you need continued access, please send your Access ID below to Donald Win.',
+                    showAccessId: true,
+                    contactEmail: 'donald.c.win@gmail.com'
+                });
+                return false;
             }
-        } catch (cacheErr) {
-            console.error('Cache check failed:', cacheErr);
+        } catch (err) {
+            console.error('Worker check failed:', err.message);
+            // Fall through to cache
         }
-        
-        // Fail open for safety
-        console.warn('⚠️ Failing open - allowing access due to error and no cache');
-        return true;
     }
+
+    // Offline or network error — use cache
+    try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        if (raw) {
+            const cached = JSON.parse(raw);
+            const lastCheck = localStorage.getItem(CACHE_CHECK_KEY);
+            console.warn('Using cached access from:', lastCheck);
+            if (cached.allowed) {
+                return true;
+            } else {
+                await showAccessDeniedScreen(deviceId, {
+                    title: 'Access Restricted',
+                    body: 'This application requires authorization. You appear to be offline or your access has been revoked.',
+                    showAccessId: true,
+                    contactEmail: 'donald.c.win@gmail.com'
+                });
+                return false;
+            }
+        }
+    } catch (e) { /* bad cache */ }
+
+    // No cache and no network — fail open
+    console.warn('No cache and no network — failing open');
+    return true;
 }
 
 async function showAccessDeniedScreen(deviceId, messageConfig = {}) {
@@ -550,145 +454,14 @@ function getMyDeviceId() {
 }
 
 function clearKillSwitchCache() {
-    console.log('%c════════════════════════════════════════', 'color: #f59e0b; font-weight: bold;');
-    console.log('%cCLEARING KILL-SWITCH CACHE', 'color: #f59e0b; font-size: 16px; font-weight: bold;');
-    console.log('%c════════════════════════════════════════', 'color: #f59e0b; font-weight: bold;');
-    
-    localStorage.removeItem('ampact_cached_access');
-    localStorage.removeItem('ampact_last_check');
-    
-    console.log('✓ Cache cleared!');
-    console.log('Reload the page to fetch fresh data from Gist');
-    console.log('');
-    console.log('Run this if you updated your Gist and changes are not taking effect.');
+    localStorage.removeItem(CACHE_KEY);
+    localStorage.removeItem(CACHE_CHECK_KEY);
+    // Note: dcw-device-id is shared across apps — do not clear it here
+    console.log('Cache cleared. Reload to re-check.');
 }
 
-async function validateKillSwitch() {
-    try {
-        const response = await fetch(AIRTABLE_URL, {
-            headers: {
-                'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const data = await response.json();
-        
-        console.log('%c════════════════════════════════════════', 'color: #10b981; font-weight: bold;');
-        console.log('%cAIRTABLE KILL-SWITCH VALIDATION', 'color: #10b981; font-size: 16px; font-weight: bold;');
-        console.log('%c════════════════════════════════════════', 'color: #10b981; font-weight: bold;');
-        
-        console.log('Airtable Base:', AIRTABLE_BASE_ID);
-        console.log('Table:', AIRTABLE_TABLE_NAME);
-        console.log('Total records:', data.records?.length || 0);
-        console.log('');
-        
-        // Check master switch
-        const masterControl = data.records?.find(record => 
-            record.fields['Access ID'] === 'SYSTEM-CONTROL'
-        );
-        
-        if (masterControl) {
-            const masterStatus = (masterControl.fields['Status'] || '').toLowerCase();
-            console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #f59e0b; font-weight: bold;');
-            console.log('%cMASTER SWITCH STATUS', 'color: #f59e0b; font-size: 14px; font-weight: bold;');
-            console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #f59e0b; font-weight: bold;');
-            if (masterStatus === 'active') {
-                console.log('%c🌍 OPEN MODE - All users allowed', 'color: #10b981; font-size: 14px; font-weight: bold;');
-                console.log('The master switch is set to Active');
-                console.log('Anyone can access the app regardless of whitelist');
-            } else {
-                console.log('%c🔒 WHITELIST MODE - Only approved users', 'color: #dc2626; font-size: 14px; font-weight: bold;');
-                console.log('The master switch is set to Revoked');
-                console.log('Only users in the Active list can access');
-            }
-            console.log('');
-        } else {
-            console.log('%c⚠️ No master switch found', 'color: #f59e0b; font-weight: bold;');
-            console.log('Add a record with Access ID = "SYSTEM-CONTROL" to enable master switch');
-            console.log('');
-        }
-        
-        if (data.records && Array.isArray(data.records)) {
-            console.log('Active users:');
-            let activeCount = 0;
-            data.records.forEach((record, index) => {
-                const accessId = record.fields['Access ID'];
-                const name = record.fields['Name'] || 'Unknown';
-                const status = record.fields['Status'] || 'Unknown';
-                const device = record.fields['Device'] || '';
-                const notes = record.fields['Notes'] || '';
-                
-                if (accessId === 'SYSTEM-CONTROL') return; // Skip master control in user list
-                
-                if (status.toLowerCase() === 'active') {
-                    activeCount++;
-                    const isValid = isValidDeviceId(accessId);
-                    console.log(`  ${activeCount}. ${accessId} - ${name} ${isValid ? '✓' : '✗ INVALID FORMAT'}`);
-                    if (device) console.log(`     Device: ${device}`);
-                    if (notes) console.log(`     Notes: ${notes}`);
-                }
-            });
-            
-            console.log('');
-            console.log('Revoked users:');
-            data.records.forEach(record => {
-                const accessId = record.fields['Access ID'];
-                const status = record.fields['Status'] || '';
-                if (accessId === 'SYSTEM-CONTROL') return; // Skip master control
-                if (status.toLowerCase() === 'revoked') {
-                    const name = record.fields['Name'] || 'Unknown';
-                    console.log(`  ✗ ${accessId} - ${name}`);
-                }
-            });
-        }
-        
-        console.log('');
-        const myId = getDeviceId();
-        
-        // Check if in open mode
-        if (masterControl && (masterControl.fields['Status'] || '').toLowerCase() === 'active') {
-            console.log('Your Device ID:', myId);
-            console.log('You are allowed:', '✅ YES (Open mode - everyone allowed)');
-        } else {
-            const activeUsers = data.records
-                .filter(record => {
-                    const status = record.fields['Status'];
-                    const accessId = record.fields['Access ID'];
-                    return accessId !== 'SYSTEM-CONTROL' && 
-                           status && 
-                           status.toLowerCase() === 'active';
-                })
-                .map(record => record.fields['Access ID'])
-                .filter(id => id && typeof id === 'string');
-            
-            const amIAllowed = isDeviceAllowed(myId, activeUsers);
-            console.log('Your Device ID:', myId);
-            console.log('You are allowed:', amIAllowed ? '✅ YES' : '❌ NO');
-        }
-        
-        console.log('');
-        console.log('To grant yourself access:');
-        console.log('1. Open Airtable (app or web)');
-        console.log('2. Open "AMPACT Access Control" base');
-        console.log('3. Add a record:');
-        console.log(`   Access ID: ${myId}`);
-        console.log('   Name: Your Name');
-        console.log('   Status: Active');
-        
-    } catch (err) {
-        console.error('Validation failed:', err);
-        console.log('');
-        console.log('Possible issues:');
-        console.log('- Airtable API key might be wrong');
-        console.log('- Base ID might be wrong');
-        console.log('- Table name might be wrong (should be "Users")');
-        console.log('- No internet connection');
-    }
-}
 
 window.getMyDeviceId = getMyDeviceId;
-window.validateKillSwitch = validateKillSwitch;
 window.clearKillSwitchCache = clearKillSwitchCache;
 
 // ============================================
