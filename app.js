@@ -1,5 +1,5 @@
 /**
- * AMPACT Selector - v13.2.0
+ * AMPACT Selector - v13.1.0
  * Airtable kill-switch with master toggle - SYSTEM-CONTROL record for open/whitelist mode
  */
 let dbData = []; 
@@ -289,20 +289,59 @@ window.addEventListener('online', async () => {
     } catch (e) { /* ignore */ }
 });
 
-// Device ID — stable random UUID stored in localStorage.
-// Format: AMP-XXXX-XXXX-XXXX (hex, uppercase)
+// Device ID — shared across all DCW apps via localStorage + cookie backup.
+// localStorage is primary; cookie is backup in case storage is evicted.
+// Both are 10-year lifetime. Same key used by re-former.
+const DEVICE_ID_KEY = 'dcw-device-id';
+
 function generateDeviceId() {
     const uuid = crypto.randomUUID().replace(/-/g, '').toUpperCase();
     return 'DCW-' + uuid.slice(0, 4) + '-' + uuid.slice(4, 8) + '-' + uuid.slice(8, 12);
 }
 
+function isValidDcwId(id) {
+    return typeof id === 'string' && /^DCW-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}$/.test(id);
+}
+
+function readIdFromCookie() {
+    var match = document.cookie.match(/(?:^|;\s*)dcw-device-id=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+}
+
+function writeIdToCookie(id) {
+    var expires = new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toUTCString();
+    document.cookie = 'dcw-device-id=' + encodeURIComponent(id) + ';expires=' + expires + ';path=/;SameSite=Strict';
+}
+
 function getDeviceId() {
-    let deviceId = localStorage.getItem('dcw-device-id');
-    if (!deviceId || !/^DCW-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}$/.test(deviceId)) {
-        deviceId = generateDeviceId();
-        localStorage.setItem('dcw-device-id', deviceId);
+    // Request persistent storage so Chrome won't evict localStorage under pressure
+    if (navigator.storage && navigator.storage.persist) {
+        navigator.storage.persist();
     }
-    return deviceId;
+
+    var id = localStorage.getItem(DEVICE_ID_KEY);
+
+    // localStorage was cleared — try restoring from cookie backup
+    if (!isValidDcwId(id)) {
+        var cookieId = readIdFromCookie();
+        if (isValidDcwId(cookieId)) {
+            console.log('[AMPACT auth] Restored device ID from cookie backup');
+            id = cookieId;
+            localStorage.setItem(DEVICE_ID_KEY, id);
+        }
+    }
+
+    // Still no valid ID — generate a new one
+    if (!isValidDcwId(id)) {
+        id = generateDeviceId();
+        console.log('[AMPACT auth] Generated new device ID:', id);
+    }
+
+    // Always write to both stores to keep them in sync
+    localStorage.setItem(DEVICE_ID_KEY, id);
+    writeIdToCookie(id);
+
+    return id;
 }
 
 // Call the Cloudflare Worker and cache the result
