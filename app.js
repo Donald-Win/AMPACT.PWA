@@ -29,8 +29,6 @@ const CHANGELOG = {
 
 function checkAndShowChangelog() {
     const lastSeenVersion = localStorage.getItem('ampact_last_seen_version');
-    
-    // If user hasn't seen this version's changelog, show it
     if (lastSeenVersion !== APP_VERSION && CHANGELOG[APP_VERSION]) {
         showChangelog(APP_VERSION);
         localStorage.setItem('ampact_last_seen_version', APP_VERSION);
@@ -60,13 +58,11 @@ function showChangelog(version) {
             <h2 class="text-2xl font-black text-gray-900 mb-1">${changelog.title}</h2>
             <div class="text-xs text-gray-500 font-bold uppercase tracking-wider">${changelog.date} • ${version}</div>
         </div>
-        
         <div class="bg-blue-50 rounded-2xl p-4 mb-4">
             <ul class="space-y-2 text-sm text-gray-700">
                 ${featuresHTML}
             </ul>
         </div>
-        
         <button id="changelog-close" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-lg active:scale-95 transition-all hover:bg-blue-700">
             Got it!
         </button>
@@ -75,21 +71,13 @@ function showChangelog(version) {
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
     
-    // Add animations
     const style = document.createElement('style');
     style.textContent = `
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        @keyframes slideUp {
-            from { transform: translateY(20px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     `;
     document.head.appendChild(style);
     
-    // Close handlers
     document.getElementById('changelog-close').addEventListener('click', () => {
         overlay.style.animation = 'fadeOut 0.3s ease-out';
         setTimeout(() => overlay.remove(), 300);
@@ -103,20 +91,17 @@ function showChangelog(version) {
     });
 }
 
-// Expose for manual triggering
 window.showChangelog = () => showChangelog(APP_VERSION);
 
-let currentMode = 'find'; // 'find' or 'reverse'
+let currentMode = 'find';
 
 
 // ============================================
-// PWA INSTALL - Must be registered immediately
-// beforeinstallprompt fires early, before onload
+// PWA INSTALL
 // ============================================
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    // Button may not exist yet - check on DOM ready too
     const installBtn = document.getElementById('install-btn');
     if (installBtn) installBtn.classList.remove('hidden');
 });
@@ -137,29 +122,23 @@ function setupUpdateDetection() {
     
     let refreshing = false;
     
-    // Detect when new service worker is waiting to activate
     navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;
         refreshing = true;
         window.location.reload();
     });
     
-    // Check for updates every time the page loads
     navigator.serviceWorker.ready.then(registration => {
         registration.update();
         
-        // If there's a waiting service worker, prompt user to update
         if (registration.waiting) {
             showUpdatePrompt(registration.waiting);
         }
         
-        // Listen for new service worker installing
         registration.addEventListener('updatefound', () => {
             const newWorker = registration.installing;
-            
             newWorker.addEventListener('statechange', () => {
                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                    // New service worker is ready
                     showUpdatePrompt(newWorker);
                 }
             });
@@ -180,7 +159,6 @@ function showUpdatePrompt(worker) {
             <h2 class="text-xl font-black text-gray-900 mb-2">Update Available!</h2>
             <p class="text-sm text-gray-600">A new version of AMPACT Selector is ready to install.</p>
         </div>
-        
         <div class="space-y-2">
             <button id="update-now" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-lg active:scale-95 transition-all hover:bg-blue-700">
                 Update Now
@@ -203,15 +181,13 @@ function showUpdatePrompt(worker) {
     });
 }
 
-// Keyboard navigation state
 let selectedIndex = -1;
 let currentListType = null;
 
-// Settings
 let settings = {
-    sortBy: 'name', // 'name', 'size', 'material'
+    sortBy: 'name',
     showDiameters: true,
-    hiddenConductors: [] // Array of conductor names that are hidden
+    hiddenConductors: []
 };
 
 const colorThemes = {
@@ -231,7 +207,7 @@ const WORKER_URL = 'https://re-former-auth.donald-c-win-2a0.workers.dev';
 const WORKER_APP_ID = 'ampact';
 const CACHE_KEY = 'ampact_cached_access';
 const CACHE_CHECK_KEY = 'ampact_last_check';
-const POLL_MS = 45000; // 45 seconds
+const POLL_MS = 45000;
 
 let _pollTimer = null;
 
@@ -250,11 +226,10 @@ function startPolling() {
                     contactEmail: 'donald.c.win@gmail.com'
                 });
             }
-        } catch (e) { /* network hiccup - try next interval */ }
+        } catch (e) { /* network hiccup */ }
     }, POLL_MS);
 }
 
-// Re-check immediately when tab becomes visible
 document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState !== 'visible' || !navigator.onLine) return;
     try {
@@ -271,7 +246,6 @@ document.addEventListener('visibilitychange', async () => {
     } catch (e) { /* ignore */ }
 });
 
-// Re-check immediately when connection is restored
 window.addEventListener('online', async () => {
     try {
         const result = await checkWorker();
@@ -290,12 +264,15 @@ window.addEventListener('online', async () => {
 });
 
 // Device ID — shared across all DCW apps via localStorage + cookie backup.
-// localStorage is primary; cookie is backup in case storage is evicted.
-// Both are 10-year lifetime. Same key used by re-former.
 const DEVICE_ID_KEY = 'dcw-device-id';
 
 function generateDeviceId() {
-    const uuid = crypto.randomUUID().replace(/-/g, '').toUpperCase();
+    // Fallback for HTTP (no crypto.randomUUID) and older browsers
+    const uuid = (crypto.randomUUID
+        ? crypto.randomUUID()
+        : '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, c =>
+            (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16))
+    ).replace(/-/g, '').toUpperCase();
     return 'DCW-' + uuid.slice(0, 4) + '-' + uuid.slice(4, 8) + '-' + uuid.slice(8, 12);
 }
 
@@ -314,14 +291,12 @@ function writeIdToCookie(id) {
 }
 
 function getDeviceId() {
-    // Request persistent storage so Chrome won't evict localStorage under pressure
     if (navigator.storage && navigator.storage.persist) {
         navigator.storage.persist();
     }
 
     var id = localStorage.getItem(DEVICE_ID_KEY);
 
-    // localStorage was cleared — try restoring from cookie backup
     if (!isValidDcwId(id)) {
         var cookieId = readIdFromCookie();
         if (isValidDcwId(cookieId)) {
@@ -331,20 +306,17 @@ function getDeviceId() {
         }
     }
 
-    // Still no valid ID — generate a new one
     if (!isValidDcwId(id)) {
         id = generateDeviceId();
         console.log('[AMPACT auth] Generated new device ID:', id);
     }
 
-    // Always write to both stores to keep them in sync
     localStorage.setItem(DEVICE_ID_KEY, id);
     writeIdToCookie(id);
 
     return id;
 }
 
-// Call the Cloudflare Worker and cache the result
 async function checkWorker() {
     const deviceId = getDeviceId();
     const res = await fetch(WORKER_URL, {
@@ -355,7 +327,6 @@ async function checkWorker() {
     });
     if (!res.ok) throw new Error('Worker responded ' + res.status);
     const result = await res.json();
-    // Cache result for offline use
     try {
         localStorage.setItem(CACHE_KEY, JSON.stringify(
             Object.assign({}, result, { cachedAt: Date.now() })
@@ -385,11 +356,9 @@ async function checkKillSwitch() {
             }
         } catch (err) {
             console.error('Worker check failed:', err.message);
-            // Fall through to cache
         }
     }
 
-    // Offline or network error — use cache
     try {
         const raw = localStorage.getItem(CACHE_KEY);
         if (raw) {
@@ -410,7 +379,6 @@ async function checkKillSwitch() {
         }
     } catch (e) { /* bad cache */ }
 
-    // No cache and no network — fail open
     console.warn('No cache and no network — failing open');
     return true;
 }
@@ -441,64 +409,45 @@ async function showAccessDeniedScreen(deviceId, messageConfig = {}) {
             .access-id-section { background: #f3f4f6; border-radius: 16px; padding: 1.5rem; margin-bottom: 1.5rem; }
             .access-id-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin-bottom: 0.5rem; }
             .access-id-value { font-size: 1.25rem; font-weight: 900; color: #1f2937; font-family: 'Courier New', monospace; letter-spacing: 0.05em; text-align: center; padding: 0.75rem; background: white; border-radius: 12px; border: 2px solid #e5e7eb; user-select: all; cursor: text; word-break: break-all; }
-            .access-id-value:hover { border-color: #667eea; background: #fafafa; }
-            .access-id-value:active { border-color: #667eea; background: #e0e7ff; }
             .contact-section { text-align: center; padding-top: 1.5rem; border-top: 1px solid #e5e7eb; }
             .contact-label { font-size: 0.875rem; color: #6b7280; margin-bottom: 0.5rem; }
-            .contact-email { display: inline-block; color: #667eea; font-weight: 700; text-decoration: none; padding: 0.5rem 1rem; border-radius: 8px; transition: all 0.2s; }
-            .contact-email:hover { background: #f3f4f6; }
-            .retry-button { width: 100%; padding: 0.75rem; background: transparent; color: #6b7280; border: 2px solid #e5e7eb; border-radius: 12px; font-weight: 600; font-size: 0.875rem; cursor: pointer; transition: all 0.2s; margin-top: 1rem; }
-            .retry-button:hover { border-color: #9ca3af; color: #4b5563; }
+            .contact-email { display: inline-block; color: #667eea; font-weight: 700; text-decoration: none; padding: 0.5rem 1rem; border-radius: 8px; }
+            .retry-button { width: 100%; padding: 0.75rem; background: transparent; color: #6b7280; border: 2px solid #e5e7eb; border-radius: 12px; font-weight: 600; font-size: 0.875rem; cursor: pointer; margin-top: 1rem; }
         </style>
-        
         <div class="access-denied-container">
             <div class="access-card">
                 <div class="access-icon">🔐</div>
                 <h1 class="access-title">${title}</h1>
                 <p class="access-body">${body}</p>
-                
                 ${showAccessId ? `
                     <div class="access-id-section">
                         <div class="access-id-label">Your Access ID</div>
-                        <div class="access-id-value" id="access-id-display">${deviceId}</div>
+                        <div class="access-id-value">${deviceId}</div>
                     </div>
                 ` : ''}
-                
                 ${contactEmail ? `
                     <div class="contact-section">
                         <div class="contact-label">Contact for access:</div>
                         <a href="mailto:${contactEmail}?subject=AMPACT Selector Access Request&body=Hello, I would like to request access to the AMPACT Selector app.%0D%0A%0D%0AMy Access ID is: ${deviceId}%0D%0A%0D%0AThank you." class="contact-email">${contactEmail}</a>
                     </div>
                 ` : ''}
-                
                 <button class="retry-button" onclick="location.reload()">Check Access Again</button>
             </div>
         </div>
-        
-        <script>
-            // No JavaScript needed - native text selection works
-        </script>
     `;
 }
 
 function getMyDeviceId() {
     const deviceId = getDeviceId();
-    console.log('%c════════════════════════════════════════', 'color: #667eea; font-weight: bold;');
-    console.log('%cYOUR DEVICE ID', 'color: #667eea; font-size: 16px; font-weight: bold;');
-    console.log('%c════════════════════════════════════════', 'color: #667eea; font-weight: bold;');
-    console.log('%c' + deviceId, 'color: #1f2937; font-size: 18px; font-weight: bold; font-family: monospace; background: #f3f4f6; padding: 8px; border-radius: 4px;');
-    console.log('%c════════════════════════════════════════', 'color: #667eea; font-weight: bold;');
-    console.log('%cCopy the COMPLETE ID above (all 17 characters)', 'color: #dc2626; font-weight: bold;');
+    console.log('%cYOUR DEVICE ID: ' + deviceId, 'color: #667eea; font-size: 16px; font-weight: bold; font-family: monospace;');
     return deviceId;
 }
 
 function clearKillSwitchCache() {
     localStorage.removeItem(CACHE_KEY);
     localStorage.removeItem(CACHE_CHECK_KEY);
-    // Note: dcw-device-id is shared across apps — do not clear it here
     console.log('Cache cleared. Reload to re-check.');
 }
-
 
 window.getMyDeviceId = getMyDeviceId;
 window.clearKillSwitchCache = clearKillSwitchCache;
@@ -508,21 +457,14 @@ window.clearKillSwitchCache = clearKillSwitchCache;
 // ============================================
 
 window.onload = async () => {
-    // Check kill-switch before initializing
     const isEnabled = await checkKillSwitch();
     if (!isEnabled) return;
 
     console.log(`AMPACT Selector ${APP_VERSION} initialized.`);
     
-    // Load settings
     loadSettings();
-    
-    // Show loading indicator
     showLoadingIndicator();
-    
     await loadData();
-    
-    // Hide loading indicator
     hideLoadingIndicator();
     
     setupEventListeners();
@@ -531,7 +473,6 @@ window.onload = async () => {
     setupPWA();
     setupUpdateDetection();
     
-    // Check if we should show changelog for this version
     checkAndShowChangelog();
 };
 
@@ -596,13 +537,9 @@ function getConductorMaterial(conductorName) {
     const entry = dbData.find(row => 
         row.Cable_A_Name === conductorName || row.Cable_B_Name === conductorName
     );
-    
     if (entry) {
-        if (entry.Cable_A_Name === conductorName) {
-            return entry.Cable_A_Material || 'Unknown';
-        } else {
-            return entry.Cable_B_Material || 'Unknown';
-        }
+        if (entry.Cable_A_Name === conductorName) return entry.Cable_A_Material || 'Unknown';
+        else return entry.Cable_B_Material || 'Unknown';
     }
     return 'Unknown';
 }
@@ -611,12 +548,8 @@ function updateSettingsUI() {
     document.querySelectorAll('input[name="sortBy"]').forEach(radio => {
         radio.checked = radio.value === settings.sortBy;
     });
-    
     const showDiaCheckbox = document.getElementById('setting-show-diameters');
-    if (showDiaCheckbox) {
-        showDiaCheckbox.checked = settings.showDiameters;
-    }
-    
+    if (showDiaCheckbox) showDiaCheckbox.checked = settings.showDiameters;
     updateConductorVisibilityList();
 }
 
@@ -636,27 +569,20 @@ function updateConductorVisibilityList() {
     const countDisplay = document.getElementById('conductor-count');
     if (countDisplay) {
         const visibleCount = conductorOptions.filter(opt => !settings.hiddenConductors.includes(opt.name)).length;
-        const totalCount = conductorOptions.length;
-        countDisplay.textContent = `${visibleCount} of ${totalCount} visible`;
+        countDisplay.textContent = `${visibleCount} of ${conductorOptions.length} visible`;
     }
     
     filteredConductors.forEach(opt => {
         const isHidden = settings.hiddenConductors.includes(opt.name);
-        
         const div = document.createElement('label');
         div.className = "flex items-center justify-between p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors";
-        
         div.innerHTML = `
             <div class="flex-1">
                 <div class="font-bold text-gray-900 text-sm">${opt.name}</div>
                 ${settings.showDiameters && opt.dia > 0 ? `<div class="text-xs text-gray-500">${opt.dia}mm</div>` : ''}
             </div>
-            <input type="checkbox" 
-                data-conductor="${opt.name}" 
-                ${isHidden ? '' : 'checked'} 
-                class="conductor-visibility-toggle w-5 h-5 text-blue-600 rounded focus:ring-blue-500 focus:ring-2">
+            <input type="checkbox" data-conductor="${opt.name}" ${isHidden ? '' : 'checked'} class="conductor-visibility-toggle w-5 h-5 text-blue-600 rounded focus:ring-blue-500 focus:ring-2">
         `;
-        
         container.appendChild(div);
     });
     
@@ -664,7 +590,6 @@ function updateConductorVisibilityList() {
         checkbox.addEventListener('change', (e) => {
             const conductorName = e.target.dataset.conductor;
             const isVisible = e.target.checked;
-            
             if (isVisible) {
                 settings.hiddenConductors = settings.hiddenConductors.filter(name => name !== conductorName);
             } else {
@@ -672,7 +597,6 @@ function updateConductorVisibilityList() {
                     settings.hiddenConductors.push(conductorName);
                 }
             }
-            
             saveSettings();
             updateConductorVisibilityList();
         });
@@ -716,9 +640,7 @@ function setupSettingsPanel() {
     
     const visibilitySearch = document.getElementById('conductor-visibility-search');
     if (visibilitySearch) {
-        visibilitySearch.addEventListener('input', () => {
-            updateConductorVisibilityList();
-        });
+        visibilitySearch.addEventListener('input', () => updateConductorVisibilityList());
     }
     
     const showAllBtn = document.getElementById('show-all-conductors');
@@ -770,35 +692,23 @@ function hideLoadingIndicator() {
 async function loadData(retries = 3) {
     try {
         const response = await fetch('./data.csv');
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         
         const csvText = await response.text();
-        
-        if (!csvText || csvText.length < 100) {
-            throw new Error('Invalid or empty CSV data received');
-        }
+        if (!csvText || csvText.length < 100) throw new Error('Invalid or empty CSV data received');
         
         const parseCSV = (text) => {
             const rows = [];
-            let row = [];
-            let field = '';
-            let inQuotes = false;
+            let row = [], field = '', inQuotes = false;
             for (let i = 0; i < text.length; i++) {
                 const char = text[i];
                 if (char === '"') {
-                    if (inQuotes && text[i + 1] === '"') { field += '"'; i++; } 
+                    if (inQuotes && text[i + 1] === '"') { field += '"'; i++; }
                     else { inQuotes = !inQuotes; }
                 } else if (char === ',' && !inQuotes) {
-                    row.push(field.trim());
-                    field = '';
+                    row.push(field.trim()); field = '';
                 } else if ((char === '\n' || char === '\r') && !inQuotes) {
-                    if (field !== '' || row.length > 0) {
-                        row.push(field.trim());
-                        rows.push(row);
-                        field = ''; row = [];
-                    }
+                    if (field !== '' || row.length > 0) { row.push(field.trim()); rows.push(row); field = ''; row = []; }
                     if (char === '\r' && text[i + 1] === '\n') i++;
                 } else { field += char; }
             }
@@ -807,9 +717,7 @@ async function loadData(retries = 3) {
         };
 
         const allRows = parseCSV(csvText);
-        if (allRows.length < 2) {
-            throw new Error('CSV file is empty or has no data rows');
-        }
+        if (allRows.length < 2) throw new Error('CSV file is empty or has no data rows');
 
         const headers = allRows[0];
         const conductorMap = new Map();
@@ -817,13 +725,10 @@ async function loadData(retries = 3) {
         dbData = allRows.slice(1).map(row => {
             const entry = {};
             headers.forEach((h, i) => entry[h] = row[i] || '');
-            
             const processConductor = (name, diaStr) => {
                 if (!name) return;
                 const dia = parseFloat(diaStr) || 0;
-                if (!conductorMap.has(name) || dia > conductorMap.get(name)) {
-                    conductorMap.set(name, dia);
-                }
+                if (!conductorMap.has(name) || dia > conductorMap.get(name)) conductorMap.set(name, dia);
             };
             processConductor(entry.Cable_A_Name, entry.Cable_A_Dia_mm);
             processConductor(entry.Cable_B_Name, entry.Cable_B_Dia_mm);
@@ -834,31 +739,24 @@ async function loadData(retries = 3) {
             .map(([name, dia]) => ({ name, dia }))
             .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
         
-        if (dbData.length === 0 || conductorOptions.length === 0) {
-            throw new Error('No valid conductor data found in CSV');
-        }
+        if (dbData.length === 0 || conductorOptions.length === 0) throw new Error('No valid conductor data found in CSV');
         
         sortConductorOptions();
-        
         console.log(`✓ Loaded ${dbData.length} rows, ${conductorOptions.length} conductors`);
         
     } catch (err) {
         console.error(`Data load failed (${retries} retries remaining):`, err);
-        
         if (retries > 0) {
             await new Promise(resolve => setTimeout(resolve, 1000));
             return loadData(retries - 1);
         }
-        
         hideLoadingIndicator();
         document.body.innerHTML = `
             <div class="min-h-screen flex items-center justify-center p-4 bg-gray-100">
                 <div class="bg-red-50 border-4 border-red-500 rounded-3xl p-8 max-w-md text-center">
                     <h1 class="text-2xl font-black text-red-600 mb-4">⚠️ Load Error</h1>
                     <p class="text-gray-700 mb-6">Unable to load conductor database. Please check your connection and try again.</p>
-                    <button onclick="location.reload()" class="bg-red-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-red-700 active:scale-95 transition-all">
-                        Retry
-                    </button>
+                    <button onclick="location.reload()" class="bg-red-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-red-700 active:scale-95 transition-all">Retry</button>
                 </div>
             </div>
         `;
@@ -871,10 +769,7 @@ async function loadData(retries = 3) {
 // ============================================
 
 function calculate() {
-    if (!selection1 || !selection2) {
-        displayResults([], 'default');
-        return;
-    }
+    if (!selection1 || !selection2) { displayResults([], 'default'); return; }
 
     const matches = dbData.filter(row => 
         (row.Cable_A_Name === selection1 && row.Cable_B_Name === selection2) ||
@@ -896,14 +791,12 @@ function displayResults(matches, themeKey) {
 
     document.body.style.backgroundColor = theme.body;
     headerSelector.className = `transition-colors duration-500 ${theme.header}`;
-    
     outputBox.className = `p-4 rounded-[2.5rem] border-4 text-center min-h-[140px] w-full flex flex-col items-center justify-center transition-all duration-300 ${theme.bg} ${theme.border}`;
     
     if (themeKey === 'default') {
         outputBox.innerHTML = `<div class="font-black uppercase text-gray-300 text-3xl tracking-tighter">Ready</div>`;
         return;
     }
-
     if (matches.length === 0) {
         outputBox.innerHTML = `<div class="font-black uppercase text-white text-2xl tracking-tighter">No Match</div>`;
         return;
@@ -912,10 +805,7 @@ function displayResults(matches, themeKey) {
     const uniqueMatches = [];
     const seenParts = new Set();
     matches.forEach(m => {
-        if (!seenParts.has(m.Part_Number)) {
-            uniqueMatches.push(m);
-            seenParts.add(m.Part_Number);
-        }
+        if (!seenParts.has(m.Part_Number)) { uniqueMatches.push(m); seenParts.add(m.Part_Number); }
     });
 
     let html = `<div class="w-full space-y-5">`;
@@ -955,23 +845,16 @@ function renderList(type, filterText) {
     if (filtered.length > 0) {
         list.classList.remove('hidden');
         input.setAttribute('aria-expanded', 'true');
-        
         filtered.forEach((opt, index) => {
             const div = document.createElement('div');
             div.className = "px-5 py-4 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0 font-bold text-gray-700 active:bg-blue-100 transition-colors list-item relative";
             div.setAttribute('data-index', index);
-            
             const diameterDisplay = settings.showDiameters && opt.dia > 0 ? `${opt.dia}mm` : '';
-            
             div.innerHTML = `
                 <span class="pr-20">${opt.name}</span>
                 ${diameterDisplay ? `<span class="absolute right-5 top-1/2 -translate-y-1/2 text-[10px] opacity-30 font-normal">${diameterDisplay}</span>` : ''}
             `;
-            
-            div.onmousedown = (e) => {
-                e.preventDefault();
-                selectOption(type, opt.name);
-            };
+            div.onmousedown = (e) => { e.preventDefault(); selectOption(type, opt.name); };
             list.appendChild(div);
         });
     } else {
@@ -987,43 +870,25 @@ function selectOption(type, optionName) {
     
     input.value = optionName;
     clear.classList.remove('hidden');
-    
-    if (type === 'tap') {
-        selection1 = optionName;
-    } else {
-        selection2 = optionName;
-    }
-    
+    if (type === 'tap') selection1 = optionName;
+    else selection2 = optionName;
     list.classList.add('hidden');
     input.setAttribute('aria-expanded', 'false');
     selectedIndex = -1;
     currentListType = null;
-    
     input.blur();
-    
     calculate();
 }
 
 function updateKeyboardSelection() {
     if (currentListType === null) return;
-    
     const list = document.getElementById(`${currentListType}-list`);
     const items = list.querySelectorAll('.list-item');
-    
     items.forEach((item, idx) => {
-        if (idx === selectedIndex) {
-            item.classList.add('bg-blue-100');
-            item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        } else {
-            item.classList.remove('bg-blue-100');
-        }
+        if (idx === selectedIndex) { item.classList.add('bg-blue-100'); item.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+        else item.classList.remove('bg-blue-100');
     });
 }
-
-// ============================================
-// EVENT LISTENERS
-// ============================================
-
 
 // ============================================
 // REVERSE LOOKUP MODE
@@ -1058,13 +923,7 @@ function setupModeToggle() {
     
     reverseSearch.addEventListener('input', (e) => {
         const query = e.target.value.trim().toUpperCase();
-        
-        if (query.length === 0) {
-            reverseClear.classList.add('hidden');
-            displayResults([], 'default');
-            return;
-        }
-        
+        if (query.length === 0) { reverseClear.classList.add('hidden'); displayResults([], 'default'); return; }
         reverseClear.classList.remove('hidden');
         performReverseLookup(query);
     });
@@ -1083,12 +942,7 @@ function performReverseLookup(query) {
         const shortCode = (row.NZ_Alpha_Short_Code || '').toUpperCase();
         return partNumber === query || shortCode === query;
     });
-    
-    if (matches.length === 0) {
-        displayReverseLookupResults([], 'none');
-        return;
-    }
-    
+    if (matches.length === 0) { displayReverseLookupResults([], 'none'); return; }
     const themeKey = (matches[0].Chart_Source || 'default').toLowerCase();
     displayReverseLookupResults(matches, themeKey);
 }
@@ -1100,44 +954,27 @@ function displayReverseLookupResults(matches, themeKey) {
 
     document.body.style.backgroundColor = theme.body;
     headerSelector.className = `transition-colors duration-500 ${theme.header}`;
-    
     outputBox.className = `p-4 rounded-[2.5rem] border-4 text-center min-h-[140px] w-full flex flex-col items-center justify-center transition-all duration-300 ${theme.bg} ${theme.border}`;
     
-    if (themeKey === 'default') {
-        outputBox.innerHTML = `<div class="font-black uppercase text-gray-300 text-3xl tracking-tighter">Ready</div>`;
-        return;
-    }
-
-    if (matches.length === 0) {
-        outputBox.innerHTML = `<div class="font-black uppercase text-white text-2xl tracking-tighter">No Match</div>`;
-        return;
-    }
+    if (themeKey === 'default') { outputBox.innerHTML = `<div class="font-black uppercase text-gray-300 text-3xl tracking-tighter">Ready</div>`; return; }
+    if (matches.length === 0) { outputBox.innerHTML = `<div class="font-black uppercase text-white text-2xl tracking-tighter">No Match</div>`; return; }
     
     const pairs = new Set();
     matches.forEach(m => {
-        // Skip if either conductor is hidden
-        if (settings.hiddenConductors.includes(m.Cable_A_Name) || 
-            settings.hiddenConductors.includes(m.Cable_B_Name)) {
-            return;
-        }
-        const pair = [m.Cable_A_Name, m.Cable_B_Name].sort().join(' + ');
-        pairs.add(pair);
+        if (settings.hiddenConductors.includes(m.Cable_A_Name) || settings.hiddenConductors.includes(m.Cable_B_Name)) return;
+        pairs.add([m.Cable_A_Name, m.Cable_B_Name].sort().join(' + '));
     });
-    
-    let html = `<div class="w-full space-y-3 max-h-[400px] overflow-y-auto custom-list">`;
     
     const firstMatch = matches[0];
     const shortCode = firstMatch.NZ_Alpha_Short_Code && firstMatch.NZ_Alpha_Short_Code.trim();
-    html += `
+    let html = `<div class="w-full space-y-3 max-h-[400px] overflow-y-auto custom-list">
         <div class="pb-3 border-b-2 ${theme.border} mb-3">
             <div class="flex flex-row items-center justify-center gap-3 w-full">
                 <div class="font-black uppercase tracking-tighter ${theme.text}" style="font-size: clamp(1.1rem, 5.5vw, 1.875rem);">${firstMatch.Part_Number}</div>
                 ${shortCode ? `<div class="px-4 py-2 rounded-2xl font-black uppercase tracking-tight ${theme.sub} ${theme.text} shadow-sm flex-shrink-0" style="font-size: clamp(1rem, 4.5vw, 1.5rem);">${shortCode}</div>` : ''}
             </div>
         </div>
-    `;
-    
-    html += `<div class="text-xs font-black uppercase tracking-widest ${theme.text} mb-2 opacity-70">Compatible Pairs:</div>`;
+        <div class="text-xs font-black uppercase tracking-widest ${theme.text} mb-2 opacity-70">Compatible Pairs:</div>`;
     
     Array.from(pairs).forEach(pair => {
         const [condA, condB] = pair.split(' + ');
@@ -1146,10 +983,8 @@ function displayReverseLookupResults(matches, themeKey) {
                 <div class="font-bold text-sm">${condA}</div>
                 <div class="text-xs opacity-70">+</div>
                 <div class="font-bold text-sm">${condB}</div>
-            </div>
-        `;
+            </div>`;
     });
-    
     html += `</div>`;
     
     outputBox.innerHTML = html;
@@ -1163,51 +998,22 @@ function setupEventListeners() {
         const clear = document.getElementById(`${type}-clear`);
         const list = document.getElementById(`${type}-list`);
 
-        input.addEventListener('focus', () => {
-            renderList(type, input.value);
-        });
-        
+        input.addEventListener('focus', () => renderList(type, input.value));
         input.addEventListener('input', () => {
             clear.classList.toggle('hidden', input.value === '');
             renderList(type, input.value);
         });
-        
         input.addEventListener('keydown', (e) => {
-            const list = document.getElementById(`${type}-list`);
             const items = list.querySelectorAll('.list-item');
-            
             if (items.length === 0) return;
-            
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
-                updateKeyboardSelection();
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                selectedIndex = Math.max(selectedIndex - 1, 0);
-                updateKeyboardSelection();
-            } else if (e.key === 'Enter' && selectedIndex >= 0) {
-                e.preventDefault();
-                const selectedItem = items[selectedIndex];
-                const optionName = selectedItem.querySelector('span').textContent;
-                selectOption(type, optionName);
-            } else if (e.key === 'Escape') {
-                list.classList.add('hidden');
-                input.setAttribute('aria-expanded', 'false');
-                selectedIndex = -1;
-                currentListType = null;
-            }
+            if (e.key === 'ArrowDown') { e.preventDefault(); selectedIndex = Math.min(selectedIndex + 1, items.length - 1); updateKeyboardSelection(); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); selectedIndex = Math.max(selectedIndex - 1, 0); updateKeyboardSelection(); }
+            else if (e.key === 'Enter' && selectedIndex >= 0) { e.preventDefault(); selectOption(type, items[selectedIndex].querySelector('span').textContent); }
+            else if (e.key === 'Escape') { list.classList.add('hidden'); input.setAttribute('aria-expanded', 'false'); selectedIndex = -1; currentListType = null; }
         });
-        
         input.addEventListener('blur', () => {
-            setTimeout(() => {
-                list.classList.add('hidden');
-                input.setAttribute('aria-expanded', 'false');
-                selectedIndex = -1;
-                currentListType = null;
-            }, 250);
+            setTimeout(() => { list.classList.add('hidden'); input.setAttribute('aria-expanded', 'false'); selectedIndex = -1; currentListType = null; }, 250);
         });
-
         clear.addEventListener('click', () => {
             input.value = '';
             if (type === 'tap') selection1 = ''; else selection2 = '';
@@ -1218,8 +1024,7 @@ function setupEventListeners() {
 
     document.getElementById('reset-button').addEventListener('click', () => {
         ['tap', 'stirrup'].forEach(type => {
-            const input = document.getElementById(`${type}-search`);
-            input.value = '';
+            document.getElementById(`${type}-search`).value = '';
             document.getElementById(`${type}-clear`).classList.add('hidden');
         });
         selection1 = ''; selection2 = '';
@@ -1227,18 +1032,9 @@ function setupEventListeners() {
     });
 
     document.addEventListener('click', (e) => {
-        if (!e.target.closest('#tap-container')) {
-            document.getElementById('tap-list').classList.add('hidden');
-            document.getElementById('tap-search').setAttribute('aria-expanded', 'false');
-        }
-        if (!e.target.closest('#stirrup-container')) {
-            document.getElementById('stirrup-list').classList.add('hidden');
-            document.getElementById('stirrup-search').setAttribute('aria-expanded', 'false');
-        }
-        if (!e.target.closest('#tap-container') && !e.target.closest('#stirrup-container')) {
-            selectedIndex = -1;
-            currentListType = null;
-        }
+        if (!e.target.closest('#tap-container')) { document.getElementById('tap-list').classList.add('hidden'); document.getElementById('tap-search').setAttribute('aria-expanded', 'false'); }
+        if (!e.target.closest('#stirrup-container')) { document.getElementById('stirrup-list').classList.add('hidden'); document.getElementById('stirrup-search').setAttribute('aria-expanded', 'false'); }
+        if (!e.target.closest('#tap-container') && !e.target.closest('#stirrup-container')) { selectedIndex = -1; currentListType = null; }
     });
 }
 
@@ -1247,25 +1043,15 @@ function setupEventListeners() {
 // ============================================
 
 function setupPWA() {
-    // Register service worker
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./sw.js')
-            .then(reg => {
-                console.log('✓ Service Worker registered:', reg.scope);
-            })
-            .catch(err => {
-                console.error('✗ Service Worker registration failed:', err);
-            });
+            .then(reg => console.log('✓ Service Worker registered:', reg.scope))
+            .catch(err => console.error('✗ Service Worker registration failed:', err));
     }
 
-    // Wire up install button (beforeinstallprompt already caught at top of file)
     const installBtn = document.getElementById('install-btn');
     if (installBtn) {
-        // If prompt was already captured before DOM was ready, show button now
-        if (deferredPrompt) {
-            installBtn.classList.remove('hidden');
-        }
-
+        if (deferredPrompt) installBtn.classList.remove('hidden');
         installBtn.addEventListener('click', async () => {
             if (deferredPrompt) {
                 deferredPrompt.prompt();
