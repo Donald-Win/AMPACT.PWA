@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ampact-cache-v13.5.0';
+const CACHE_NAME = 'ampact-cache-v13.5.1';
 const ASSETS = [
   './',
   './index.html',
