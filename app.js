@@ -1,5 +1,5 @@
 /**
- * AMPACT Selector - v13.5.0
+ * AMPACT Selector - v13.5.1
  * Airtable kill-switch with master toggle - SYSTEM-CONTROL record for open/whitelist mode
  */
 let dbData = []; 
