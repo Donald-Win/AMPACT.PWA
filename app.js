@@ -1,5 +1,5 @@
 /**
- * AMPACT Selector - v13.5.1
+ * AMPACT Selector - v13.6.0
  * Airtable kill-switch with master toggle - SYSTEM-CONTROL record for open/whitelist mode
  */
 let dbData = []; 
@@ -7,7 +7,37 @@ let conductorOptions = [];
 let selection1 = '';
 let selection2 = '';
 let deferredPrompt = null;
-const APP_VERSION = "v13.2.0";
+const APP_VERSION = "v13.6.0";
+
+// Map of conductorName -> material, built once when data loads (see loadData).
+// Avoids doing an O(n) dbData.find() scan inside sort comparators.
+let conductorMaterialMap = new Map();
+
+// ============================================
+// SMALL UTILITIES
+// ============================================
+
+// Escapes text that gets interpolated into innerHTML templates.
+// dbData comes from a local CSV we control, but this keeps user-facing
+// rendering safe if the CSV is ever edited/shared/updated by someone else.
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// Simple debounce helper for search inputs.
+function debounce(fn, wait) {
+    let timer = null;
+    return function debounced(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), wait);
+    };
+}
 
 // ============================================
 // CHANGELOG SYSTEM
@@ -23,6 +53,27 @@ const CHANGELOG = {
             "Reverse lookup respects your hidden conductor settings",
             "Results show color-coded by wedge type",
             "Single-line result display for better readability"
+        ]
+    },
+    "v13.5.1": {
+        title: "Under-the-Hood Fixes 🔧",
+        date: "July 2026",
+        features: [
+            "Faster sorting - conductor material lookups no longer re-scan the whole database",
+            "Search boxes now debounce while you type for smoother scrolling",
+            "Reverse lookup compatible pairs are now sorted alphabetically",
+            "Accessibility: pinch-to-zoom restored, screen reader support improved",
+            "General stability and consistency fixes"
+        ]
+    },
+    "v13.6.0": {
+        title: "Built for the Field 📶",
+        date: "October 2026",
+        features: [
+            "Styling and fonts are now bundled with the app, so it looks right even if you first open it with no signal",
+            "Offline access now needs a re-check with the server every 14 days",
+            "Long-press the app icon for a Reverse Lookup shortcut",
+            "Better maskable home screen icon on Android"
         ]
     }
 };
@@ -49,14 +100,14 @@ function showChangelog(version) {
     modal.style.animation = 'slideUp 0.4s ease-out';
     
     let featuresHTML = changelog.features.map(f => 
-        `<li class="flex gap-2 items-start"><span class="text-blue-600 font-black">•</span><span>${f}</span></li>`
+        `<li class="flex gap-2 items-start"><span class="text-blue-600 font-black">•</span><span>${escapeHtml(f)}</span></li>`
     ).join('');
     
     modal.innerHTML = `
         <div class="text-center mb-4">
             <div class="text-4xl mb-2">🎉</div>
-            <h2 class="text-2xl font-black text-gray-900 mb-1">${changelog.title}</h2>
-            <div class="text-xs text-gray-500 font-bold uppercase tracking-wider">${changelog.date} • ${version}</div>
+            <h2 class="text-2xl font-black text-gray-900 mb-1">${escapeHtml(changelog.title)}</h2>
+            <div class="text-xs text-gray-500 font-bold uppercase tracking-wider">${escapeHtml(changelog.date)} • ${escapeHtml(version)}</div>
         </div>
         <div class="bg-blue-50 rounded-2xl p-4 mb-4">
             <ul class="space-y-2 text-sm text-gray-700">
@@ -208,6 +259,9 @@ const WORKER_APP_ID = 'ampact';
 const CACHE_KEY = 'ampact_cached_access';
 const CACHE_CHECK_KEY = 'ampact_last_check';
 const POLL_MS = 45000;
+// How long a cached "allowed" result is trusted while offline before the
+// device must reconnect and re-verify with the Worker.
+const OFFLINE_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
 
 let _pollTimer = null;
 
@@ -287,7 +341,8 @@ function readIdFromCookie() {
 
 function writeIdToCookie(id) {
     var expires = new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toUTCString();
-    document.cookie = 'dcw-device-id=' + encodeURIComponent(id) + ';expires=' + expires + ';path=/;SameSite=Strict';
+    var secureFlag = (location.protocol === 'https:') ? ';Secure' : '';
+    document.cookie = 'dcw-device-id=' + encodeURIComponent(id) + ';expires=' + expires + ';path=/;SameSite=Strict' + secureFlag;
 }
 
 function getDeviceId() {
@@ -365,6 +420,17 @@ async function checkKillSwitch() {
             const cached = JSON.parse(raw);
             const lastCheck = localStorage.getItem(CACHE_CHECK_KEY);
             console.warn('Using cached access from:', lastCheck);
+            const checkedAt = Number(cached.cachedAt) || Date.parse(lastCheck) || 0;
+            if (cached.allowed && (Date.now() - checkedAt) > OFFLINE_GRACE_MS) {
+                await showAccessDeniedScreen(deviceId, {
+                    title: 'Verification Required',
+                    body: 'This app needs to go online briefly to re-verify your access. Connect to mobile data or Wi-Fi, then tap Check Access Again.',
+                    showAccessId: true,
+                    contactEmail: 'donald.c.win@gmail.com',
+                    keepCache: true
+                });
+                return false;
+            }
             if (cached.allowed) {
                 return true;
             } else {
@@ -384,15 +450,19 @@ async function checkKillSwitch() {
 }
 
 async function showAccessDeniedScreen(deviceId, messageConfig = {}) {
-    if ('serviceWorker' in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        for (let registration of registrations) {
-            await registration.unregister();
+    // keepCache: used when access just needs re-verifying (not revoked), so the
+    // offline copy of the app survives and the retry button still works offline.
+    if (!messageConfig.keepCache) {
+        if ('serviceWorker' in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            for (let registration of registrations) {
+                await registration.unregister();
+            }
         }
+
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map(name => caches.delete(name)));
     }
-    
-    const cacheNames = await caches.keys();
-    await Promise.all(cacheNames.map(name => caches.delete(name)));
     
     const title = messageConfig.title || 'Access Restricted';
     const body = messageConfig.body || 'This application is currently restricted. Please contact the administrator for access.';
@@ -417,18 +487,18 @@ async function showAccessDeniedScreen(deviceId, messageConfig = {}) {
         <div class="access-denied-container">
             <div class="access-card">
                 <div class="access-icon">🔐</div>
-                <h1 class="access-title">${title}</h1>
-                <p class="access-body">${body}</p>
+                <h1 class="access-title">${escapeHtml(title)}</h1>
+                <p class="access-body">${escapeHtml(body)}</p>
                 ${showAccessId ? `
                     <div class="access-id-section">
                         <div class="access-id-label">Your Access ID</div>
-                        <div class="access-id-value">${deviceId}</div>
+                        <div class="access-id-value">${escapeHtml(deviceId)}</div>
                     </div>
                 ` : ''}
                 ${contactEmail ? `
                     <div class="contact-section">
                         <div class="contact-label">Contact for access:</div>
-                        <a href="mailto:${contactEmail}?subject=AMPACT Selector Access Request&body=Hello, I would like to request access to the AMPACT Selector app.%0D%0A%0D%0AMy Access ID is: ${deviceId}%0D%0A%0D%0AThank you." class="contact-email">${contactEmail}</a>
+                        <a href="mailto:${encodeURIComponent(contactEmail)}?subject=AMPACT Selector Access Request&body=Hello, I would like to request access to the AMPACT Selector app.%0D%0A%0D%0AMy Access ID is: ${encodeURIComponent(deviceId)}%0D%0A%0D%0AThank you." class="contact-email">${escapeHtml(contactEmail)}</a>
                     </div>
                 ` : ''}
                 <button class="retry-button" onclick="location.reload()">Check Access Again</button>
@@ -469,6 +539,10 @@ window.onload = async () => {
     
     setupEventListeners();
     setupModeToggle();
+    // Manifest shortcut: index.html?mode=reverse opens straight into Reverse Lookup
+    if (new URLSearchParams(location.search).get('mode') === 'reverse') {
+        document.getElementById('mode-reverse').click();
+    }
     setupSettingsPanel();
     setupPWA();
     setupUpdateDetection();
@@ -533,15 +607,10 @@ function sortConductorOptions() {
     }
 }
 
+// O(1) lookup backed by conductorMaterialMap (built once in loadData),
+// instead of re-scanning the entire dbData array on every comparison.
 function getConductorMaterial(conductorName) {
-    const entry = dbData.find(row => 
-        row.Cable_A_Name === conductorName || row.Cable_B_Name === conductorName
-    );
-    if (entry) {
-        if (entry.Cable_A_Name === conductorName) return entry.Cable_A_Material || 'Unknown';
-        else return entry.Cable_B_Material || 'Unknown';
-    }
-    return 'Unknown';
+    return conductorMaterialMap.get(conductorName) || 'Unknown';
 }
 
 function updateSettingsUI() {
@@ -572,21 +641,23 @@ function updateConductorVisibilityList() {
         countDisplay.textContent = `${visibleCount} of ${conductorOptions.length} visible`;
     }
     
+    const fragment = document.createDocumentFragment();
     filteredConductors.forEach(opt => {
         const isHidden = settings.hiddenConductors.includes(opt.name);
         const div = document.createElement('label');
         div.className = "flex items-center justify-between p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors";
         div.innerHTML = `
             <div class="flex-1">
-                <div class="font-bold text-gray-900 text-sm">${opt.name}</div>
-                ${settings.showDiameters && opt.dia > 0 ? `<div class="text-xs text-gray-500">${opt.dia}mm</div>` : ''}
+                <div class="font-bold text-gray-900 text-sm">${escapeHtml(opt.name)}</div>
+                ${settings.showDiameters && opt.dia > 0 ? `<div class="text-xs text-gray-500">${escapeHtml(opt.dia)}mm</div>` : ''}
             </div>
-            <input type="checkbox" data-conductor="${opt.name}" ${isHidden ? '' : 'checked'} class="conductor-visibility-toggle w-5 h-5 text-blue-600 rounded focus:ring-blue-500 focus:ring-2">
+            <input type="checkbox" data-conductor="${escapeHtml(opt.name)}" ${isHidden ? '' : 'checked'} class="conductor-visibility-toggle w-5 h-5 text-blue-600 rounded focus:ring-blue-500 focus:ring-2">
         `;
-        container.appendChild(div);
+        fragment.appendChild(div);
     });
+    container.appendChild(fragment);
     
-    document.querySelectorAll('.conductor-visibility-toggle').forEach(checkbox => {
+    container.querySelectorAll('.conductor-visibility-toggle').forEach(checkbox => {
         checkbox.addEventListener('change', (e) => {
             const conductorName = e.target.dataset.conductor;
             const isVisible = e.target.checked;
@@ -640,7 +711,7 @@ function setupSettingsPanel() {
     
     const visibilitySearch = document.getElementById('conductor-visibility-search');
     if (visibilitySearch) {
-        visibilitySearch.addEventListener('input', () => updateConductorVisibilityList());
+        visibilitySearch.addEventListener('input', debounce(() => updateConductorVisibilityList(), 120));
     }
     
     const showAllBtn = document.getElementById('show-all-conductors');
@@ -721,19 +792,25 @@ async function loadData(retries = 3) {
 
         const headers = allRows[0];
         const conductorMap = new Map();
+        const materialMap = new Map();
 
         dbData = allRows.slice(1).map(row => {
             const entry = {};
             headers.forEach((h, i) => entry[h] = row[i] || '');
-            const processConductor = (name, diaStr) => {
+            const processConductor = (name, diaStr, material) => {
                 if (!name) return;
                 const dia = parseFloat(diaStr) || 0;
                 if (!conductorMap.has(name) || dia > conductorMap.get(name)) conductorMap.set(name, dia);
+                // Record material the first time we see this conductor name.
+                // (Data is consistent per-name in practice; last-write is fine as a fallback.)
+                if (material && !materialMap.has(name)) materialMap.set(name, material);
             };
-            processConductor(entry.Cable_A_Name, entry.Cable_A_Dia_mm);
-            processConductor(entry.Cable_B_Name, entry.Cable_B_Dia_mm);
+            processConductor(entry.Cable_A_Name, entry.Cable_A_Dia_mm, entry.Cable_A_Material);
+            processConductor(entry.Cable_B_Name, entry.Cable_B_Dia_mm, entry.Cable_B_Material);
             return entry;
         });
+
+        conductorMaterialMap = materialMap;
 
         conductorOptions = Array.from(conductorMap.entries())
             .map(([name, dia]) => ({ name, dia }))
@@ -768,6 +845,20 @@ async function loadData(retries = 3) {
 // CALCULATION & DISPLAY
 // ============================================
 
+// Shared by both normal and reverse-lookup result rendering: applies the
+// wedge-colour theme to the page background, header, and output box chrome.
+function applyTheme(themeKey) {
+    const outputBox = document.getElementById('output-box');
+    const headerSelector = document.getElementById('header-selector');
+    const theme = colorThemes[themeKey] || colorThemes.default;
+
+    document.body.style.backgroundColor = theme.body;
+    headerSelector.className = `transition-colors duration-500 ${theme.header}`;
+    outputBox.className = `p-4 rounded-[2.5rem] border-4 text-center min-h-[140px] w-full flex flex-col items-center justify-center transition-all duration-300 ${theme.bg} ${theme.border}`;
+
+    return { outputBox, theme };
+}
+
 function calculate() {
     if (!selection1 || !selection2) { displayResults([], 'default'); return; }
 
@@ -785,13 +876,7 @@ function calculate() {
 }
 
 function displayResults(matches, themeKey) {
-    const outputBox = document.getElementById('output-box');
-    const headerSelector = document.getElementById('header-selector');
-    const theme = colorThemes[themeKey] || colorThemes.default;
-
-    document.body.style.backgroundColor = theme.body;
-    headerSelector.className = `transition-colors duration-500 ${theme.header}`;
-    outputBox.className = `p-4 rounded-[2.5rem] border-4 text-center min-h-[140px] w-full flex flex-col items-center justify-center transition-all duration-300 ${theme.bg} ${theme.border}`;
+    const { outputBox, theme } = applyTheme(themeKey);
     
     if (themeKey === 'default') {
         outputBox.innerHTML = `<div class="font-black uppercase text-gray-300 text-3xl tracking-tighter">Ready</div>`;
@@ -813,8 +898,8 @@ function displayResults(matches, themeKey) {
         const shortCode = match.NZ_Alpha_Short_Code && match.NZ_Alpha_Short_Code.trim();
         html += `
             <div class="flex flex-row items-center justify-center gap-3 w-full px-2 whitespace-nowrap">
-                <div class="font-black uppercase tracking-tighter ${theme.text}" style="font-size: clamp(1.1rem, 5.5vw, 1.875rem);">${match.Part_Number}</div>
-                ${shortCode ? `<div class="px-4 py-2 rounded-2xl font-black uppercase tracking-tight ${theme.sub} ${theme.text} shadow-sm flex-shrink-0" style="font-size: clamp(1rem, 4.5vw, 1.5rem);">${shortCode}</div>` : ''}
+                <div class="font-black uppercase tracking-tighter ${theme.text}" style="font-size: clamp(1.1rem, 5.5vw, 1.875rem);">${escapeHtml(match.Part_Number)}</div>
+                ${shortCode ? `<div class="px-4 py-2 rounded-2xl font-black uppercase tracking-tight ${theme.sub} ${theme.text} shadow-sm flex-shrink-0" style="font-size: clamp(1rem, 4.5vw, 1.5rem);">${escapeHtml(shortCode)}</div>` : ''}
             </div>
         `;
     });
@@ -845,18 +930,23 @@ function renderList(type, filterText) {
     if (filtered.length > 0) {
         list.classList.remove('hidden');
         input.setAttribute('aria-expanded', 'true');
+        const fragment = document.createDocumentFragment();
         filtered.forEach((opt, index) => {
             const div = document.createElement('div');
             div.className = "px-5 py-4 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0 font-bold text-gray-700 active:bg-blue-100 transition-colors list-item relative";
             div.setAttribute('data-index', index);
+            div.setAttribute('data-name', opt.name);
+            div.setAttribute('role', 'option');
+            div.setAttribute('aria-selected', 'false');
             const diameterDisplay = settings.showDiameters && opt.dia > 0 ? `${opt.dia}mm` : '';
             div.innerHTML = `
-                <span class="pr-20">${opt.name}</span>
-                ${diameterDisplay ? `<span class="absolute right-5 top-1/2 -translate-y-1/2 text-[10px] opacity-30 font-normal">${diameterDisplay}</span>` : ''}
+                <span class="pr-20">${escapeHtml(opt.name)}</span>
+                ${diameterDisplay ? `<span class="absolute right-5 top-1/2 -translate-y-1/2 text-[10px] opacity-30 font-normal">${escapeHtml(diameterDisplay)}</span>` : ''}
             `;
             div.onmousedown = (e) => { e.preventDefault(); selectOption(type, opt.name); };
-            list.appendChild(div);
+            fragment.appendChild(div);
         });
+        list.appendChild(fragment);
     } else {
         list.classList.add('hidden');
         input.setAttribute('aria-expanded', 'false');
@@ -885,8 +975,14 @@ function updateKeyboardSelection() {
     const list = document.getElementById(`${currentListType}-list`);
     const items = list.querySelectorAll('.list-item');
     items.forEach((item, idx) => {
-        if (idx === selectedIndex) { item.classList.add('bg-blue-100'); item.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
-        else item.classList.remove('bg-blue-100');
+        if (idx === selectedIndex) {
+            item.classList.add('bg-blue-100');
+            item.setAttribute('aria-selected', 'true');
+            item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } else {
+            item.classList.remove('bg-blue-100');
+            item.setAttribute('aria-selected', 'false');
+        }
     });
 }
 
@@ -921,11 +1017,13 @@ function setupModeToggle() {
         reverseSearch.focus();
     });
     
+    const debouncedLookup = debounce((query) => performReverseLookup(query), 100);
+
     reverseSearch.addEventListener('input', (e) => {
         const query = e.target.value.trim().toUpperCase();
         if (query.length === 0) { reverseClear.classList.add('hidden'); displayResults([], 'default'); return; }
         reverseClear.classList.remove('hidden');
-        performReverseLookup(query);
+        debouncedLookup(query);
     });
     
     reverseClear.addEventListener('click', () => {
@@ -948,13 +1046,7 @@ function performReverseLookup(query) {
 }
 
 function displayReverseLookupResults(matches, themeKey) {
-    const outputBox = document.getElementById('output-box');
-    const headerSelector = document.getElementById('header-selector');
-    const theme = colorThemes[themeKey] || colorThemes.default;
-
-    document.body.style.backgroundColor = theme.body;
-    headerSelector.className = `transition-colors duration-500 ${theme.header}`;
-    outputBox.className = `p-4 rounded-[2.5rem] border-4 text-center min-h-[140px] w-full flex flex-col items-center justify-center transition-all duration-300 ${theme.bg} ${theme.border}`;
+    const { outputBox, theme } = applyTheme(themeKey);
     
     if (themeKey === 'default') { outputBox.innerHTML = `<div class="font-black uppercase text-gray-300 text-3xl tracking-tighter">Ready</div>`; return; }
     if (matches.length === 0) { outputBox.innerHTML = `<div class="font-black uppercase text-white text-2xl tracking-tighter">No Match</div>`; return; }
@@ -965,24 +1057,26 @@ function displayReverseLookupResults(matches, themeKey) {
         pairs.add([m.Cable_A_Name, m.Cable_B_Name].sort().join(' + '));
     });
     
+    const sortedPairs = Array.from(pairs).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+    
     const firstMatch = matches[0];
     const shortCode = firstMatch.NZ_Alpha_Short_Code && firstMatch.NZ_Alpha_Short_Code.trim();
     let html = `<div class="w-full space-y-3 max-h-[400px] overflow-y-auto custom-list">
         <div class="pb-3 border-b-2 ${theme.border} mb-3">
             <div class="flex flex-row items-center justify-center gap-3 w-full">
-                <div class="font-black uppercase tracking-tighter ${theme.text}" style="font-size: clamp(1.1rem, 5.5vw, 1.875rem);">${firstMatch.Part_Number}</div>
-                ${shortCode ? `<div class="px-4 py-2 rounded-2xl font-black uppercase tracking-tight ${theme.sub} ${theme.text} shadow-sm flex-shrink-0" style="font-size: clamp(1rem, 4.5vw, 1.5rem);">${shortCode}</div>` : ''}
+                <div class="font-black uppercase tracking-tighter ${theme.text}" style="font-size: clamp(1.1rem, 5.5vw, 1.875rem);">${escapeHtml(firstMatch.Part_Number)}</div>
+                ${shortCode ? `<div class="px-4 py-2 rounded-2xl font-black uppercase tracking-tight ${theme.sub} ${theme.text} shadow-sm flex-shrink-0" style="font-size: clamp(1rem, 4.5vw, 1.5rem);">${escapeHtml(shortCode)}</div>` : ''}
             </div>
         </div>
         <div class="text-xs font-black uppercase tracking-widest ${theme.text} mb-2 opacity-70">Compatible Pairs:</div>`;
     
-    Array.from(pairs).forEach(pair => {
+    sortedPairs.forEach(pair => {
         const [condA, condB] = pair.split(' + ');
         html += `
             <div class="py-2 px-3 rounded-xl ${theme.sub} ${theme.text}">
-                <div class="font-bold text-sm">${condA}</div>
+                <div class="font-bold text-sm">${escapeHtml(condA)}</div>
                 <div class="text-xs opacity-70">+</div>
-                <div class="font-bold text-sm">${condB}</div>
+                <div class="font-bold text-sm">${escapeHtml(condB)}</div>
             </div>`;
     });
     html += `</div>`;
@@ -998,17 +1092,19 @@ function setupEventListeners() {
         const clear = document.getElementById(`${type}-clear`);
         const list = document.getElementById(`${type}-list`);
 
+        const debouncedRender = debounce((value) => renderList(type, value), 80);
+
         input.addEventListener('focus', () => renderList(type, input.value));
         input.addEventListener('input', () => {
             clear.classList.toggle('hidden', input.value === '');
-            renderList(type, input.value);
+            debouncedRender(input.value);
         });
         input.addEventListener('keydown', (e) => {
             const items = list.querySelectorAll('.list-item');
             if (items.length === 0) return;
             if (e.key === 'ArrowDown') { e.preventDefault(); selectedIndex = Math.min(selectedIndex + 1, items.length - 1); updateKeyboardSelection(); }
             else if (e.key === 'ArrowUp') { e.preventDefault(); selectedIndex = Math.max(selectedIndex - 1, 0); updateKeyboardSelection(); }
-            else if (e.key === 'Enter' && selectedIndex >= 0) { e.preventDefault(); selectOption(type, items[selectedIndex].querySelector('span').textContent); }
+            else if (e.key === 'Enter' && selectedIndex >= 0) { e.preventDefault(); selectOption(type, items[selectedIndex].getAttribute('data-name')); }
             else if (e.key === 'Escape') { list.classList.add('hidden'); input.setAttribute('aria-expanded', 'false'); selectedIndex = -1; currentListType = null; }
         });
         input.addEventListener('blur', () => {

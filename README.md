@@ -84,6 +84,18 @@ Tap the **gear icon** (⚙) in the top right corner to open Settings.
 
 ---
 
+## Development
+
+Styles are compiled from Tailwind (v3.4.17 standalone CLI, no Node needed) so the app works fully offline.
+
+```
+./build.sh
+```
+
+This downloads the CLI and the Inter font on first run, then writes `styles.css`. Commit `styles.css` and `fonts/`. Re-run it whenever you add or change Tailwind classes in `index.html` or `app.js`. Bump `APP_VERSION` in `app.js` and `CACHE_NAME` in `sw.js` together on every release.
+
+---
+
 ## Access
 
 Access to this application is granted at the sole discretion of Donald Win and may be revoked at any time. If you have trouble accessing the app, contact Donald Win with your Access ID (shown on the access request screen).
