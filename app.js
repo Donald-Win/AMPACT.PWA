@@ -1,5 +1,5 @@
 /**
- * AMPACT Selector - v13.6.0
+ * AMPACT Selector - v13.6.1
  * Airtable kill-switch with master toggle - SYSTEM-CONTROL record for open/whitelist mode
  */
 let dbData = []; 
@@ -7,7 +7,7 @@ let conductorOptions = [];
 let selection1 = '';
 let selection2 = '';
 let deferredPrompt = null;
-const APP_VERSION = "v13.6.0";
+const APP_VERSION = "v13.6.1";
 
 // Map of conductorName -> material, built once when data loads (see loadData).
 // Avoids doing an O(n) dbData.find() scan inside sort comparators.
@@ -75,6 +75,15 @@ const CHANGELOG = {
             "Long-press the app icon for a Reverse Lookup shortcut",
             "Better maskable home screen icon on Android"
         ]
+    },
+    "v13.6.1": {
+        title: "Update Fixes \U0001F527",
+        date: "October 2026",
+        features: [
+            "App updates now wait for you to tap Update Now instead of restarting on their own",
+            "Version number and a What's New button added to Settings",
+            "Fixed updates occasionally picking up out-of-date files"
+        ]
     }
 };
 
@@ -122,21 +131,25 @@ function showChangelog(version) {
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
     
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-    `;
-    document.head.appendChild(style);
+    if (!document.getElementById('changelog-keyframes')) {
+        const style = document.createElement('style');
+        style.id = 'changelog-keyframes';
+        style.textContent = `
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+            @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        `;
+        document.head.appendChild(style);
+    }
     
     document.getElementById('changelog-close').addEventListener('click', () => {
-        overlay.style.animation = 'fadeOut 0.3s ease-out';
+        overlay.style.animation = 'fadeOut 0.3s ease-out forwards';
         setTimeout(() => overlay.remove(), 300);
     });
     
     overlay.addEventListener('click', (e) => {
         if (e.target === overlay) {
-            overlay.style.animation = 'fadeOut 0.3s ease-out';
+            overlay.style.animation = 'fadeOut 0.3s ease-out forwards';
             setTimeout(() => overlay.remove(), 300);
         }
     });
@@ -693,6 +706,16 @@ function setupSettingsPanel() {
     
     settingsClose.addEventListener('click', closeSettings);
     settingsOverlay.addEventListener('click', closeSettings);
+
+    const versionEl = document.getElementById('app-version');
+    if (versionEl) versionEl.textContent = APP_VERSION;
+    const whatsNewBtn = document.getElementById('show-changelog-btn');
+    if (whatsNewBtn) {
+        whatsNewBtn.addEventListener('click', () => {
+            closeSettings();
+            showChangelog(APP_VERSION);
+        });
+    }
     
     document.querySelectorAll('input[name="sortBy"]').forEach(radio => {
         radio.addEventListener('change', (e) => {

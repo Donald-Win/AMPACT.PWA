@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ampact-cache-v13.6.0';
+const CACHE_NAME = 'ampact-cache-v13.6.1';
 
 // Must all exist, or install fails and the old service worker keeps running.
 const CORE_ASSETS = [
@@ -20,11 +20,14 @@ const OPTIONAL_ASSETS = [
 
 self.addEventListener('install', (e) => {
   console.log('[Service Worker] Installing', CACHE_NAME);
-  self.skipWaiting();
+  // No skipWaiting() here: a new version waits until the user taps "Update Now"
+  // (the app then sends SKIP_WAITING). First-ever install still activates immediately.
   e.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
-      await cache.addAll(CORE_ASSETS);
-      await Promise.allSettled(OPTIONAL_ASSETS.map((url) => cache.add(url)));
+      // cache:'reload' bypasses the browser HTTP cache so we never store stale
+      // copies (GitHub Pages serves files with a 10 minute max-age).
+      await Promise.all(CORE_ASSETS.map((url) => cache.add(new Request(url, { cache: 'reload' }))));
+      await Promise.allSettled(OPTIONAL_ASSETS.map((url) => cache.add(new Request(url, { cache: 'reload' }))));
       console.log('[Service Worker] Cached assets');
     })
   );
