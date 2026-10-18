@@ -1,5 +1,5 @@
 /**
- * AMPACT Selector - v13.6.1
+ * AMPACT Selector - v13.6.2
  * Airtable kill-switch with master toggle - SYSTEM-CONTROL record for open/whitelist mode
  */
 let dbData = []; 
@@ -7,7 +7,7 @@ let conductorOptions = [];
 let selection1 = '';
 let selection2 = '';
 let deferredPrompt = null;
-const APP_VERSION = "v13.6.1";
+const APP_VERSION = "v13.6.2";
 
 // Map of conductorName -> material, built once when data loads (see loadData).
 // Avoids doing an O(n) dbData.find() scan inside sort comparators.
@@ -77,35 +77,52 @@ const CHANGELOG = {
         ]
     },
     "v13.6.1": {
-        title: "Update Fixes \U0001F527",
+        title: "Update Fixes 🔧",
         date: "October 2026",
         features: [
             "App updates now wait for you to tap Update Now instead of restarting on their own",
             "Version number and a What's New button added to Settings",
             "Fixed updates occasionally picking up out-of-date files"
         ]
+    },
+    "v13.6.2": {
+        title: "What's New Fix 📝",
+        date: "October 2026",
+        features: [
+            "Fixed a bug that stopped the What's New popup (and the automatic changelog after updates) from ever appearing",
+            "Popups no longer depend on the stylesheet to display"
+        ]
     }
 };
+
+// Inline layout for popups so they always overlay the screen, even if the
+// compiled stylesheet is missing a class that only appears in JS strings.
+const POPUP_OVERLAY_CSS = 'position:fixed;top:0;right:0;bottom:0;left:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;background:rgba(0,0,0,0.6);';
+const POPUP_MODAL_CSS = 'background:#fff;border-radius:1.5rem;padding:1.5rem;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);';
 
 function checkAndShowChangelog() {
     const lastSeenVersion = localStorage.getItem('ampact_last_seen_version');
     if (lastSeenVersion !== APP_VERSION && CHANGELOG[APP_VERSION]) {
-        showChangelog(APP_VERSION);
+        displayChangelog(APP_VERSION);
         localStorage.setItem('ampact_last_seen_version', APP_VERSION);
     }
 }
 
-function showChangelog(version) {
+// NOTE: named displayChangelog on purpose. A global function called showChangelog
+// would be overwritten by the window.showChangelog helper below and recurse forever.
+function displayChangelog(version) {
     const changelog = CHANGELOG[version];
     if (!changelog) return;
     
     const overlay = document.createElement('div');
     overlay.id = 'changelog-overlay';
     overlay.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fadeIn';
+    overlay.style.cssText = POPUP_OVERLAY_CSS;
     overlay.style.animation = 'fadeIn 0.3s ease-out';
     
     const modal = document.createElement('div');
     modal.className = 'bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl transform animate-slideUp';
+    modal.style.cssText = POPUP_MODAL_CSS + 'max-width:28rem;';
     modal.style.animation = 'slideUp 0.4s ease-out';
     
     let featuresHTML = changelog.features.map(f => 
@@ -155,7 +172,7 @@ function showChangelog(version) {
     });
 }
 
-window.showChangelog = () => showChangelog(APP_VERSION);
+window.showChangelog = () => displayChangelog(APP_VERSION);
 
 let currentMode = 'find';
 
@@ -213,9 +230,11 @@ function setupUpdateDetection() {
 function showUpdatePrompt(worker) {
     const overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4';
+    overlay.style.cssText = POPUP_OVERLAY_CSS;
     
     const modal = document.createElement('div');
     modal.className = 'bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl';
+    modal.style.cssText = POPUP_MODAL_CSS + 'max-width:24rem;';
     
     modal.innerHTML = `
         <div class="text-center mb-4">
@@ -713,7 +732,7 @@ function setupSettingsPanel() {
     if (whatsNewBtn) {
         whatsNewBtn.addEventListener('click', () => {
             closeSettings();
-            showChangelog(APP_VERSION);
+            displayChangelog(APP_VERSION);
         });
     }
     

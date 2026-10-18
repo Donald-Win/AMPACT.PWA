@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ampact-cache-v13.6.1';
+const CACHE_NAME = 'ampact-cache-v13.6.2';
 
 // Must all exist, or install fails and the old service worker keeps running.
 const CORE_ASSETS = [
