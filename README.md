@@ -37,7 +37,13 @@ Installing puts the app on your home screen so it works just like a regular app,
 
 The background colour changes to match the wedge colour, making it easy to confirm you have the right connector.
 
+Tap the **up/down arrows** between the two boxes to swap Conductor A and B.
+
 **To start a new search**, tap **Clear Selection**.
+
+### Reverse Lookup
+
+Tap **Reverse Lookup** (or long-press the app icon on Android and choose it) and enter an AMPACT code, either the long part number or the short alpha code. The app lists every conductor pair that code fits. Pairs involving conductors you've hidden in Settings are left out.
 
 ---
 
@@ -47,7 +53,7 @@ The background colour changes to match the wedge colour, making it easy to confi
 
 **Colour-coded display** — The screen changes colour to match the wedge (Yellow, Blue, Red, White) so you can double-check at a glance.
 
-**Works offline** — Once installed, the app works without any mobile data or Wi-Fi. Perfect for areas with no coverage.
+**Works offline** — Once installed, the app works without any mobile data or Wi-Fi. Perfect for areas with no coverage. Every 14 days the app needs a brief connection to re-verify access.
 
 **Smart search** — Start typing any part of the conductor name and the list filters as you go. You don't need to know the exact name.
 
@@ -80,7 +86,7 @@ Tap the **gear icon** (⚙) in the top right corner to open Settings.
 - You don't need to type the full conductor name — a few letters is usually enough to find it
 - The result screen is designed to be readable in bright sunlight
 - If you lose mobile signal, the app keeps working normally
-- If the app ever seems out of date, close it fully and reopen — it will update automatically when you're back on Wi-Fi
+- If the app ever seems out of date, close it fully and reopen on Wi-Fi. When a new version is ready, an **Update Now** prompt appears — tap it to apply the update. **Settings → What's New** shows what changed
 
 ---
 

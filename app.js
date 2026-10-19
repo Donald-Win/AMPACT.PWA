@@ -1,5 +1,5 @@
 /**
- * AMPACT Selector - v13.6.2
+ * AMPACT Selector - v13.6.3
  * Airtable kill-switch with master toggle - SYSTEM-CONTROL record for open/whitelist mode
  */
 let dbData = []; 
@@ -7,7 +7,7 @@ let conductorOptions = [];
 let selection1 = '';
 let selection2 = '';
 let deferredPrompt = null;
-const APP_VERSION = "v13.6.2";
+const APP_VERSION = "v13.6.3";
 
 // Map of conductorName -> material, built once when data loads (see loadData).
 // Avoids doing an O(n) dbData.find() scan inside sort comparators.
@@ -91,6 +91,16 @@ const CHANGELOG = {
         features: [
             "Fixed a bug that stopped the What's New popup (and the automatic changelog after updates) from ever appearing",
             "Popups no longer depend on the stylesheet to display"
+        ]
+    },
+    "v13.6.3": {
+        title: "Swap & Fixes \u21C5",
+        date: "October 2026",
+        features: [
+            "New swap button between Conductor A and B",
+            "\"No Match\" is now clearly visible on a dark background",
+            "Editing a conductor box no longer leaves the old result on screen",
+            "Switching between Find Connector and Reverse Lookup keeps what you entered"
         ]
     }
 };
@@ -279,6 +289,7 @@ const colorThemes = {
     'white': { body: '#ffffff', bg: 'bg-white', text: 'text-gray-900', border: 'border-gray-200', sub: 'bg-gray-200', header: 'text-gray-400' },
     'red': { body: '#dc2626', bg: 'bg-red-600', text: 'text-white', border: 'border-red-700', sub: 'bg-red-800/60', header: 'text-red-600' },
     'copper': { body: '#b87333', bg: 'bg-[#b87333]', text: 'text-white', border: 'border-[#945d2a]', sub: 'bg-black/30', header: 'text-[#b87333]' },
+    'none': { body: '#4b5563', bg: 'bg-gray-900', text: 'text-white', border: 'border-gray-200', sub: 'hidden', header: 'text-gray-400' },
     'default': { body: '#f3f4f6', bg: 'bg-gray-50', text: 'text-gray-300', border: 'border-gray-100', sub: 'hidden', header: 'text-gray-400' }
 };
 
@@ -1046,7 +1057,7 @@ function setupModeToggle() {
         reverseBtn.className = 'flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-wider transition-all active:scale-95 bg-gray-200 text-gray-600';
         normalMode.classList.remove('hidden');
         reverseMode.classList.add('hidden');
-        displayResults([], 'default');
+        calculate();
     });
     
     reverseBtn.addEventListener('click', () => {
@@ -1055,7 +1066,8 @@ function setupModeToggle() {
         findBtn.className = 'flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-wider transition-all active:scale-95 bg-gray-200 text-gray-600';
         reverseMode.classList.remove('hidden');
         normalMode.classList.add('hidden');
-        displayResults([], 'default');
+        const q = reverseSearch.value.trim().toUpperCase();
+        if (q) performReverseLookup(q); else displayResults([], 'default');
         reverseSearch.focus();
     });
     
@@ -1139,6 +1151,12 @@ function setupEventListeners() {
         input.addEventListener('focus', () => renderList(type, input.value));
         input.addEventListener('input', () => {
             clear.classList.toggle('hidden', input.value === '');
+            // Typing over a chosen conductor invalidates it, so the result can't go stale.
+            const current = type === 'tap' ? selection1 : selection2;
+            if (current && input.value !== current) {
+                if (type === 'tap') selection1 = ''; else selection2 = '';
+                calculate();
+            }
             debouncedRender(input.value);
         });
         input.addEventListener('keydown', (e) => {
@@ -1159,6 +1177,23 @@ function setupEventListeners() {
             calculate();
         });
     });
+
+    const swapBtn = document.getElementById('swap-btn');
+    if (swapBtn) {
+        swapBtn.addEventListener('click', () => {
+            const tapInput = document.getElementById('tap-search');
+            const stirrupInput = document.getElementById('stirrup-search');
+            [tapInput.value, stirrupInput.value] = [stirrupInput.value, tapInput.value];
+            [selection1, selection2] = [selection2, selection1];
+            document.getElementById('tap-clear').classList.toggle('hidden', tapInput.value === '');
+            document.getElementById('stirrup-clear').classList.toggle('hidden', stirrupInput.value === '');
+            ['tap', 'stirrup'].forEach(t => {
+                document.getElementById(`${t}-list`).classList.add('hidden');
+                document.getElementById(`${t}-search`).setAttribute('aria-expanded', 'false');
+            });
+            calculate();
+        });
+    }
 
     document.getElementById('reset-button').addEventListener('click', () => {
         ['tap', 'stirrup'].forEach(type => {
