@@ -84,7 +84,7 @@
             
             <!-- Conductor A Search -->
             <div id="tap-container" class="relative">
-                <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-4">Conductor A (Main)</label>
+                <label for="tap-search" class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-4">Conductor A (Main)</label>
                 <div class="relative">
                     <input 
                         type="text" 
@@ -103,16 +103,9 @@
                 <div id="tap-list" role="listbox" class="hidden absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 max-h-60 overflow-y-auto custom-list"></div>
             </div>
 
-            <!-- Swap A/B -->
-            <div class="flex justify-center py-3">
-                <button id="swap-btn" type="button" class="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-all active:scale-95 shadow-sm" aria-label="Swap Conductor A and B">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>
-                </button>
-            </div>
-
             <!-- Conductor B Search -->
             <div id="stirrup-container" class="relative">
-                <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-4">Conductor B (Tap)</label>
+                <label for="stirrup-search" class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-4">Conductor B (Tap)</label>
                 <div class="relative">
                     <input 
                         type="text" 
@@ -135,7 +128,7 @@
             
             <!-- Reverse Lookup Mode -->
             <div id="reverse-mode" class="hidden">
-                <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-4">AMPACT Code</label>
+                <label for="reverse-search" class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-4">AMPACT Code</label>
                 <div class="relative">
                     <input 
                         type="text" 
@@ -257,6 +250,7 @@
                         <input 
                             type="text" 
                             id="conductor-visibility-search" 
+                            aria-label="Search conductors"
                             placeholder="Search conductors..."
                             class="w-full bg-gray-100 border-none rounded-xl py-3 px-4 text-sm font-medium text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-gray-400">
                     </div>

@@ -1,5 +1,5 @@
 /**
- * AMPACT Selector - v13.6.3
+ * AMPACT Selector - v13.6.4
  * Airtable kill-switch with master toggle - SYSTEM-CONTROL record for open/whitelist mode
  */
 let dbData = []; 
@@ -7,7 +7,7 @@ let conductorOptions = [];
 let selection1 = '';
 let selection2 = '';
 let deferredPrompt = null;
-const APP_VERSION = "v13.6.3";
+const APP_VERSION = "v13.6.4";
 
 // Map of conductorName -> material, built once when data loads (see loadData).
 // Avoids doing an O(n) dbData.find() scan inside sort comparators.
@@ -37,6 +37,23 @@ function debounce(fn, wait) {
         clearTimeout(timer);
         timer = setTimeout(() => fn.apply(this, args), wait);
     };
+}
+
+// Keeps Tab inside a dialog, calls onEscape on Esc, and returns a release function.
+function trapFocus(container, onEscape) {
+    const sel = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    const handler = (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); onEscape(); return; }
+        if (e.key !== 'Tab') return;
+        const items = Array.from(container.querySelectorAll(sel))
+            .filter(el => !el.disabled && el.getClientRects().length > 0);
+        if (items.length === 0) return;
+        const first = items[0], last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
 }
 
 // ============================================
@@ -94,13 +111,25 @@ const CHANGELOG = {
         ]
     },
     "v13.6.3": {
-        title: "Swap & Fixes \u21C5",
+        title: "Small Fixes \uD83D\uDD27",
         date: "October 2026",
         features: [
-            "New swap button between Conductor A and B",
             "\"No Match\" is now clearly visible on a dark background",
             "Editing a conductor box no longer leaves the old result on screen",
             "Switching between Find Connector and Reverse Lookup keeps what you entered"
+        ]
+    },
+    "v13.6.4": {
+        title: "Lookup & Accessibility \uD83D\uDD0D",
+        date: "October 2026",
+        features: [
+            "Reverse Lookup also accepts the end of a part number (e.g. 602031-7)",
+            "Reverse Lookup now says when compatible pairs are hidden in Settings",
+            "Tapping a conductor box that already has a choice shows the full list",
+            "Pop-ups and Settings keep keyboard focus inside and close with Esc",
+            "Better screen reader support for the conductor lists",
+            "Less background network use while the app is minimised",
+            "Removed the swap button \u2014 conductor order never changes the result"
         ]
     }
 };
@@ -134,6 +163,9 @@ function displayChangelog(version) {
     modal.className = 'bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl transform animate-slideUp';
     modal.style.cssText = POPUP_MODAL_CSS + 'max-width:28rem;';
     modal.style.animation = 'slideUp 0.4s ease-out';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'changelog-title');
     
     let featuresHTML = changelog.features.map(f => 
         `<li class="flex gap-2 items-start"><span class="text-blue-600 font-black">•</span><span>${escapeHtml(f)}</span></li>`
@@ -142,7 +174,7 @@ function displayChangelog(version) {
     modal.innerHTML = `
         <div class="text-center mb-4">
             <div class="text-4xl mb-2">🎉</div>
-            <h2 class="text-2xl font-black text-gray-900 mb-1">${escapeHtml(changelog.title)}</h2>
+            <h2 id="changelog-title" class="text-2xl font-black text-gray-900 mb-1">${escapeHtml(changelog.title)}</h2>
             <div class="text-xs text-gray-500 font-bold uppercase tracking-wider">${escapeHtml(changelog.date)} • ${escapeHtml(version)}</div>
         </div>
         <div class="bg-blue-50 rounded-2xl p-4 mb-4">
@@ -169,17 +201,19 @@ function displayChangelog(version) {
         document.head.appendChild(style);
     }
     
-    document.getElementById('changelog-close').addEventListener('click', () => {
+    const previouslyFocused = document.activeElement;
+    let release = () => {};
+    const closeChangelog = () => {
+        release();
         overlay.style.animation = 'fadeOut 0.3s ease-out forwards';
         setTimeout(() => overlay.remove(), 300);
-    });
-    
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) {
-            overlay.style.animation = 'fadeOut 0.3s ease-out forwards';
-            setTimeout(() => overlay.remove(), 300);
-        }
-    });
+        if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus();
+    };
+    release = trapFocus(modal, closeChangelog);
+    const closeBtn = document.getElementById('changelog-close');
+    closeBtn.addEventListener('click', closeChangelog);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeChangelog(); });
+    closeBtn.focus();
 }
 
 window.showChangelog = () => displayChangelog(APP_VERSION);
@@ -245,11 +279,14 @@ function showUpdatePrompt(worker) {
     const modal = document.createElement('div');
     modal.className = 'bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl';
     modal.style.cssText = POPUP_MODAL_CSS + 'max-width:24rem;';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'update-title');
     
     modal.innerHTML = `
         <div class="text-center mb-4">
             <div class="text-4xl mb-2">🔄</div>
-            <h2 class="text-xl font-black text-gray-900 mb-2">Update Available!</h2>
+            <h2 id="update-title" class="text-xl font-black text-gray-900 mb-2">Update Available!</h2>
             <p class="text-sm text-gray-600">A new version of AMPACT Selector is ready to install.</p>
         </div>
         <div class="space-y-2">
@@ -269,9 +306,10 @@ function showUpdatePrompt(worker) {
         worker.postMessage({ type: 'SKIP_WAITING' });
     });
     
-    document.getElementById('update-later').addEventListener('click', () => {
-        overlay.remove();
-    });
+    const closeUpdate = () => { release(); overlay.remove(); };
+    const release = trapFocus(modal, closeUpdate);
+    document.getElementById('update-later').addEventListener('click', closeUpdate);
+    document.getElementById('update-now').focus();
 }
 
 let selectedIndex = -1;
@@ -311,7 +349,7 @@ let _pollTimer = null;
 function startPolling() {
     if (_pollTimer) clearInterval(_pollTimer);
     _pollTimer = setInterval(async () => {
-        if (!navigator.onLine) return;
+        if (!navigator.onLine || document.visibilityState !== 'visible') return;
         try {
             const result = await checkWorker();
             if (!result.allowed) {
@@ -723,16 +761,30 @@ function setupSettingsPanel() {
     const settingsClose = document.getElementById('settings-close');
     const settingsOverlay = document.getElementById('settings-overlay');
     
+    settingsPanel.setAttribute('role', 'dialog');
+    settingsPanel.setAttribute('aria-modal', 'true');
+    settingsPanel.setAttribute('aria-label', 'Settings');
+    settingsPanel.inert = true; // off-screen panel must not be reachable by Tab or screen readers
+
+    let releaseTrap = () => {};
+    const closeSettings = () => {
+        releaseTrap();
+        releaseTrap = () => {};
+        settingsPanel.classList.add('translate-x-full');
+        settingsOverlay.classList.add('hidden');
+        settingsPanel.inert = true;
+        settingsBtn.focus();
+    };
+
     settingsBtn.addEventListener('click', () => {
+        settingsPanel.inert = false;
         settingsPanel.classList.remove('translate-x-full');
         settingsOverlay.classList.remove('hidden');
         updateSettingsUI();
+        releaseTrap();
+        releaseTrap = trapFocus(settingsPanel, closeSettings);
+        settingsClose.focus({ preventScroll: true });
     });
-    
-    const closeSettings = () => {
-        settingsPanel.classList.add('translate-x-full');
-        settingsOverlay.classList.add('hidden');
-    };
     
     settingsClose.addEventListener('click', closeSettings);
     settingsOverlay.addEventListener('click', closeSettings);
@@ -974,6 +1026,7 @@ function renderList(type, filterText) {
     list.innerHTML = '';
     selectedIndex = -1;
     currentListType = type;
+    input.removeAttribute('aria-activedescendant');
 
     const filtered = conductorOptions.filter(opt => 
         opt.name.toLowerCase().includes(filter) && 
@@ -990,6 +1043,7 @@ function renderList(type, filterText) {
             div.setAttribute('data-index', index);
             div.setAttribute('data-name', opt.name);
             div.setAttribute('role', 'option');
+            div.id = `${type}-opt-${index}`;
             div.setAttribute('aria-selected', 'false');
             const diameterDisplay = settings.showDiameters && opt.dia > 0 ? `${opt.dia}mm` : '';
             div.innerHTML = `
@@ -1017,6 +1071,7 @@ function selectOption(type, optionName) {
     else selection2 = optionName;
     list.classList.add('hidden');
     input.setAttribute('aria-expanded', 'false');
+    input.removeAttribute('aria-activedescendant');
     selectedIndex = -1;
     currentListType = null;
     input.blur();
@@ -1026,7 +1081,10 @@ function selectOption(type, optionName) {
 function updateKeyboardSelection() {
     if (currentListType === null) return;
     const list = document.getElementById(`${currentListType}-list`);
+    const input = document.getElementById(`${currentListType}-search`);
     const items = list.querySelectorAll('.list-item');
+    if (selectedIndex >= 0 && items[selectedIndex]) input.setAttribute('aria-activedescendant', items[selectedIndex].id);
+    else input.removeAttribute('aria-activedescendant');
     items.forEach((item, idx) => {
         if (idx === selectedIndex) {
             item.classList.add('bg-blue-100');
@@ -1089,11 +1147,19 @@ function setupModeToggle() {
 }
 
 function performReverseLookup(query) {
-    const matches = dbData.filter(row => {
-        const partNumber = (row.Part_Number || '').toUpperCase();
-        const shortCode = (row.NZ_Alpha_Short_Code || '').toUpperCase();
-        return partNumber === query || shortCode === query;
-    });
+    const exact = dbData.filter(row =>
+        (row.Part_Number || '').toUpperCase() === query ||
+        (row.NZ_Alpha_Short_Code || '').toUpperCase() === query
+    );
+    let matches = exact;
+    // Also accept the tail of a part number ("602031-7" finds "1-602031-7"). Exact hits stay first.
+    if (query.length >= 4) {
+        const exactSet = new Set(exact);
+        const tail = dbData.filter(row =>
+            !exactSet.has(row) && (row.Part_Number || '').toUpperCase().endsWith('-' + query)
+        );
+        matches = exact.concat(tail);
+    }
     if (matches.length === 0) { displayReverseLookupResults([], 'none'); return; }
     const themeKey = (matches[0].Chart_Source || 'default').toLowerCase();
     displayReverseLookupResults(matches, themeKey);
@@ -1101,40 +1167,52 @@ function performReverseLookup(query) {
 
 function displayReverseLookupResults(matches, themeKey) {
     const { outputBox, theme } = applyTheme(themeKey);
-    
+
     if (themeKey === 'default') { outputBox.innerHTML = `<div class="font-black uppercase text-gray-300 text-3xl tracking-tighter">Ready</div>`; return; }
     if (matches.length === 0) { outputBox.innerHTML = `<div class="font-black uppercase text-white text-2xl tracking-tighter">No Match</div>`; return; }
-    
-    const pairs = new Set();
+
+    // Group by part number, in first-seen order (exact matches were added first).
+    const groups = new Map();
     matches.forEach(m => {
-        if (settings.hiddenConductors.includes(m.Cable_A_Name) || settings.hiddenConductors.includes(m.Cable_B_Name)) return;
-        pairs.add([m.Cable_A_Name, m.Cable_B_Name].sort().join(' + '));
+        if (!groups.has(m.Part_Number)) groups.set(m.Part_Number, { shortCode: '', pairs: new Set(), hiddenPairs: new Set() });
+        const g = groups.get(m.Part_Number);
+        const code = (m.NZ_Alpha_Short_Code || '').trim();
+        if (code && !g.shortCode) g.shortCode = code;
+        const key = [m.Cable_A_Name, m.Cable_B_Name].sort().join(' + ');
+        if (settings.hiddenConductors.includes(m.Cable_A_Name) || settings.hiddenConductors.includes(m.Cable_B_Name)) g.hiddenPairs.add(key);
+        else g.pairs.add(key);
     });
-    
-    const sortedPairs = Array.from(pairs).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-    
-    const firstMatch = matches[0];
-    const shortCode = firstMatch.NZ_Alpha_Short_Code && firstMatch.NZ_Alpha_Short_Code.trim();
-    let html = `<div class="w-full space-y-3 max-h-[400px] overflow-y-auto custom-list">
+
+    let html = `<div class="w-full space-y-3 max-h-[400px] overflow-y-auto custom-list">`;
+    groups.forEach((g, partNumber) => {
+        const sortedPairs = Array.from(g.pairs).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+        html += `
         <div class="pb-3 border-b-2 ${theme.border} mb-3">
             <div class="flex flex-row items-center justify-center gap-3 w-full">
-                <div class="font-black uppercase tracking-tighter ${theme.text}" style="font-size: clamp(1.1rem, 5.5vw, 1.875rem);">${escapeHtml(firstMatch.Part_Number)}</div>
-                ${shortCode ? `<div class="px-4 py-2 rounded-2xl font-black uppercase tracking-tight ${theme.sub} ${theme.text} shadow-sm flex-shrink-0" style="font-size: clamp(1rem, 4.5vw, 1.5rem);">${escapeHtml(shortCode)}</div>` : ''}
+                <div class="font-black uppercase tracking-tighter ${theme.text}" style="font-size: clamp(1.1rem, 5.5vw, 1.875rem);">${escapeHtml(partNumber)}</div>
+                ${g.shortCode ? `<div class="px-4 py-2 rounded-2xl font-black uppercase tracking-tight ${theme.sub} ${theme.text} shadow-sm flex-shrink-0" style="font-size: clamp(1rem, 4.5vw, 1.5rem);">${escapeHtml(g.shortCode)}</div>` : ''}
             </div>
-        </div>
-        <div class="text-xs font-black uppercase tracking-widest ${theme.text} mb-2 opacity-70">Compatible Pairs:</div>`;
-    
-    sortedPairs.forEach(pair => {
-        const [condA, condB] = pair.split(' + ');
-        html += `
+        </div>`;
+        if (sortedPairs.length === 0) {
+            html += `<div class="text-xs font-bold ${theme.text} opacity-70">All ${g.hiddenPairs.size} compatible pairs are hidden in Settings</div>`;
+            return;
+        }
+        html += `<div class="text-xs font-black uppercase tracking-widest ${theme.text} mb-2 opacity-70">Compatible Pairs:</div>`;
+        sortedPairs.forEach(pair => {
+            const [condA, condB] = pair.split(' + ');
+            html += `
             <div class="py-2 px-3 rounded-xl ${theme.sub} ${theme.text}">
                 <div class="font-bold text-sm">${escapeHtml(condA)}</div>
                 <div class="text-xs opacity-70">+</div>
                 <div class="font-bold text-sm">${escapeHtml(condB)}</div>
             </div>`;
+        });
+        if (g.hiddenPairs.size > 0) {
+            html += `<div class="text-xs font-bold ${theme.text} opacity-70">+ ${g.hiddenPairs.size} more hidden in Settings</div>`;
+        }
     });
     html += `</div>`;
-    
+
     outputBox.innerHTML = html;
     outputBox.classList.add('flash-success');
     setTimeout(() => outputBox.classList.remove('flash-success'), 600);
@@ -1148,7 +1226,13 @@ function setupEventListeners() {
 
         const debouncedRender = debounce((value) => renderList(type, value), 80);
 
-        input.addEventListener('focus', () => renderList(type, input.value));
+        input.addEventListener('focus', () => {
+            // With a conductor already chosen, show the full list and select the text so typing replaces it.
+            const current = type === 'tap' ? selection1 : selection2;
+            const hasChoice = current && input.value === current;
+            renderList(type, hasChoice ? '' : input.value);
+            if (hasChoice) input.select();
+        });
         input.addEventListener('input', () => {
             clear.classList.toggle('hidden', input.value === '');
             // Typing over a chosen conductor invalidates it, so the result can't go stale.
@@ -1165,10 +1249,10 @@ function setupEventListeners() {
             if (e.key === 'ArrowDown') { e.preventDefault(); selectedIndex = Math.min(selectedIndex + 1, items.length - 1); updateKeyboardSelection(); }
             else if (e.key === 'ArrowUp') { e.preventDefault(); selectedIndex = Math.max(selectedIndex - 1, 0); updateKeyboardSelection(); }
             else if (e.key === 'Enter' && selectedIndex >= 0) { e.preventDefault(); selectOption(type, items[selectedIndex].getAttribute('data-name')); }
-            else if (e.key === 'Escape') { list.classList.add('hidden'); input.setAttribute('aria-expanded', 'false'); selectedIndex = -1; currentListType = null; }
+            else if (e.key === 'Escape') { list.classList.add('hidden'); input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); selectedIndex = -1; currentListType = null; }
         });
         input.addEventListener('blur', () => {
-            setTimeout(() => { list.classList.add('hidden'); input.setAttribute('aria-expanded', 'false'); selectedIndex = -1; currentListType = null; }, 250);
+            setTimeout(() => { list.classList.add('hidden'); input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); selectedIndex = -1; currentListType = null; }, 250);
         });
         clear.addEventListener('click', () => {
             input.value = '';
@@ -1177,23 +1261,6 @@ function setupEventListeners() {
             calculate();
         });
     });
-
-    const swapBtn = document.getElementById('swap-btn');
-    if (swapBtn) {
-        swapBtn.addEventListener('click', () => {
-            const tapInput = document.getElementById('tap-search');
-            const stirrupInput = document.getElementById('stirrup-search');
-            [tapInput.value, stirrupInput.value] = [stirrupInput.value, tapInput.value];
-            [selection1, selection2] = [selection2, selection1];
-            document.getElementById('tap-clear').classList.toggle('hidden', tapInput.value === '');
-            document.getElementById('stirrup-clear').classList.toggle('hidden', stirrupInput.value === '');
-            ['tap', 'stirrup'].forEach(t => {
-                document.getElementById(`${t}-list`).classList.add('hidden');
-                document.getElementById(`${t}-search`).setAttribute('aria-expanded', 'false');
-            });
-            calculate();
-        });
-    }
 
     document.getElementById('reset-button').addEventListener('click', () => {
         ['tap', 'stirrup'].forEach(type => {

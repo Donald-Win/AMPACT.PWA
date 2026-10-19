@@ -37,13 +37,11 @@ Installing puts the app on your home screen so it works just like a regular app,
 
 The background colour changes to match the wedge colour, making it easy to confirm you have the right connector.
 
-Tap the **up/down arrows** between the two boxes to swap Conductor A and B.
-
 **To start a new search**, tap **Clear Selection**.
 
 ### Reverse Lookup
 
-Tap **Reverse Lookup** (or long-press the app icon on Android and choose it) and enter an AMPACT code, either the long part number or the short alpha code. The app lists every conductor pair that code fits. Pairs involving conductors you've hidden in Settings are left out.
+Tap **Reverse Lookup** (or long-press the app icon on Android and choose it) and enter an AMPACT code, either the long part number or the short alpha code. You can also type just the end of a part number (for example `602031-7`). The app lists every conductor pair that code fits. Pairs involving conductors you've hidden in Settings are left out, and the app tells you how many were hidden.
 
 ---
 
